@@ -4,6 +4,14 @@ xcode-build/
 cmake-build*/
 out/
 
+# Distribution
+dist/
+*.dmg
+
+# Environment / secrets
+.env
+.env.local
+
 # IDE and editor files
 .vscode/
 .idea/

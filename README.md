@@ -22,9 +22,24 @@ The application uses ffmpeg/ffprobe as external processes for:
 
 ## Building
 
+### Quick Start (macOS)
+
+```bash
+make              # Build the app
+make run          # Build and run
+make help         # Show all available commands
+```
+
 ### Build Steps
 
-**macOS/Linux:**
+**macOS (Recommended - using Makefile):**
+```bash
+make                    # Build Release
+make BUILD_TYPE=Debug   # Build Debug
+make xcode              # Open in Xcode for debugging
+```
+
+**macOS/Linux (manual):**
 ```bash
 mkdir build
 cd build
@@ -42,13 +57,49 @@ cmake --build . --config Release
 
 Or open the generated `.sln` file in Visual Studio.
 
-**macOS (Xcode):**
+## Packaging and Distribution (macOS)
+
+### Create DMG Installer
+
 ```bash
-mkdir build
-cd build
-cmake .. -G Xcode
-open ChannelStacker.xcodeproj
+# Unsigned DMG (for local testing)
+make dmg-unsigned
+
+# Signed DMG (requires Developer ID)
+make sign CODESIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)"
+make dmg
 ```
+
+### Full Release with Notarization
+
+For distribution outside the App Store, apps must be notarized:
+
+```bash
+# Set your Apple Developer credentials
+export CODESIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)"
+export APPLE_ID="your@email.com"
+export APPLE_TEAM_ID="XXXXXXXXXX"
+export APPLE_APP_PASSWORD="@keychain:notarytool-password"
+
+# Full release: build, sign, package, notarize
+make release
+```
+
+### Makefile Targets
+
+| Target | Description |
+|--------|-------------|
+| `make` | Build the app |
+| `make run` | Build and run |
+| `make clean` | Remove build artifacts |
+| `make sign-adhoc` | Ad-hoc sign for local testing |
+| `make dmg-unsigned` | Create unsigned DMG |
+| `make dmg` | Create signed DMG |
+| `make notarize` | Notarize for Gatekeeper |
+| `make release` | Full release workflow |
+| `make install` | Install to /Applications |
+| `make list-identities` | List signing identities |
+| `make help` | Show all commands |
 
 ## Usage
 
