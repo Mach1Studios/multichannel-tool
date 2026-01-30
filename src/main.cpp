@@ -5,6 +5,7 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 #include "MainWindow.h"
+#include "ui/Mach1LookAndFeel.h"
 
 class ChannelStackerApplication : public juce::JUCEApplication
 {
@@ -28,12 +29,20 @@ public:
 
     void initialise(const juce::String& /*commandLine*/) override
     {
+        // Set custom look and feel
+        customLookAndFeel = std::make_unique<Mach1LookAndFeel>();
+        juce::LookAndFeel::setDefaultLookAndFeel(customLookAndFeel.get());
+        
         mainWindow = std::make_unique<MainWindow>(getApplicationName());
     }
 
     void shutdown() override
     {
         mainWindow.reset();
+        
+        // Clear look and feel before destroying it
+        juce::LookAndFeel::setDefaultLookAndFeel(nullptr);
+        customLookAndFeel.reset();
     }
 
     void systemRequestedQuit() override
@@ -49,6 +58,7 @@ public:
     }
 
 private:
+    std::unique_ptr<Mach1LookAndFeel> customLookAndFeel;
     std::unique_ptr<MainWindow> mainWindow;
 };
 

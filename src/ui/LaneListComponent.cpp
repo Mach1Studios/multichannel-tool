@@ -3,6 +3,7 @@
 */
 
 #include "LaneListComponent.h"
+#include "Mach1LookAndFeel.h"
 
 // Debug logging macro
 #define DEBUG_LOG(msg) DBG(msg)
@@ -31,6 +32,9 @@ LaneListComponent::~LaneListComponent()
 
 void LaneListComponent::paint(juce::Graphics& g)
 {
+    // Background
+    g.fillAll(Mach1LookAndFeel::Colors::background);
+    
     // Draw drop indicator during drag
     if (isDragging && dragInsertIndex >= 0)
     {
@@ -41,18 +45,18 @@ void LaneListComponent::paint(juce::Graphics& g)
         // Clamp to visible area
         if (y >= 0 && y <= getHeight())
         {
-            // Draw insertion line
-            g.setColour(juce::Colours::cyan);
-            g.fillRect(5, y - 2, getWidth() - 10, 4);
+            // Draw insertion line - Mach1 accent color
+            g.setColour(Mach1LookAndFeel::Colors::accent);
+            g.fillRect(5, y - 1, getWidth() - 10, 2);
 
             // Draw arrow indicators
             juce::Path leftArrow;
-            leftArrow.addTriangle(0.0f, 5.0f, 12.0f, 0.0f, 12.0f, 10.0f);
-            g.fillPath(leftArrow, juce::AffineTransform::translation(2.0f, static_cast<float>(y) - 5.0f));
+            leftArrow.addTriangle(0.0f, 4.0f, 8.0f, 0.0f, 8.0f, 8.0f);
+            g.fillPath(leftArrow, juce::AffineTransform::translation(2.0f, static_cast<float>(y) - 4.0f));
 
             juce::Path rightArrow;
-            rightArrow.addTriangle(12.0f, 5.0f, 0.0f, 0.0f, 0.0f, 10.0f);
-            g.fillPath(rightArrow, juce::AffineTransform::translation(static_cast<float>(getWidth()) - 14.0f, static_cast<float>(y) - 5.0f));
+            rightArrow.addTriangle(8.0f, 4.0f, 0.0f, 0.0f, 0.0f, 8.0f);
+            g.fillPath(rightArrow, juce::AffineTransform::translation(static_cast<float>(getWidth()) - 10.0f, static_cast<float>(y) - 4.0f));
         }
     }
 }

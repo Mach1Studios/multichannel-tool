@@ -3,6 +3,7 @@
 */
 
 #include "MainComponent.h"
+#include "ui/Mach1LookAndFeel.h"
 
 MainComponent::MainComponent()
 {
@@ -17,11 +18,15 @@ MainComponent::MainComponent()
     laneListComponent = std::make_unique<LaneListComponent>(projectModel);
     addAndMakeVisible(*laneListComponent);
 
-    // Setup export button
+    // Setup export button with Mach1 style
+    exportButton.setColour(juce::TextButton::buttonColourId, Mach1LookAndFeel::Colors::buttonOff);
+    exportButton.setColour(juce::TextButton::textColourOffId, Mach1LookAndFeel::Colors::textPrimary);
     exportButton.onClick = [this]() { showExportDialog(); };
     addAndMakeVisible(exportButton);
 
     // Setup clear button
+    clearButton.setColour(juce::TextButton::buttonColourId, Mach1LookAndFeel::Colors::buttonOff);
+    clearButton.setColour(juce::TextButton::textColourOffId, Mach1LookAndFeel::Colors::textPrimary);
     clearButton.onClick = [this]()
     {
         projectModel.clearAllLanes();
@@ -31,7 +36,8 @@ MainComponent::MainComponent()
 
     // Setup status label
     statusLabel.setJustificationType(juce::Justification::centredLeft);
-    statusLabel.setColour(juce::Label::textColourId, juce::Colours::grey);
+    statusLabel.setColour(juce::Label::textColourId, Mach1LookAndFeel::Colors::textSecondary);
+    statusLabel.setFont(juce::FontOptions(11.0f));
     addAndMakeVisible(statusLabel);
 
     updateStatus("Drop audio/video files here to add channels");
@@ -47,29 +53,31 @@ MainComponent::~MainComponent()
 
 void MainComponent::paint(juce::Graphics& g)
 {
-    g.fillAll(getLookAndFeel().findColour(juce::ResizableWindow::backgroundColourId));
+    g.fillAll(Mach1LookAndFeel::Colors::background);
 
     // Draw drop zone indicator
     auto dropZone = getLocalBounds().reduced(10).withTrimmedTop(kToolbarHeight);
 
     if (projectModel.getLaneCount() == 0)
     {
-        // Show drop hint when empty
-        g.setColour(isDragOver ? juce::Colours::lightblue.withAlpha(0.3f)
-                               : juce::Colours::grey.withAlpha(0.2f));
-        g.fillRoundedRectangle(dropZone.toFloat(), 10.0f);
+        // Show drop hint when empty - Mach1 style
+        g.setColour(isDragOver ? Mach1LookAndFeel::Colors::accent.withAlpha(0.2f)
+                               : Mach1LookAndFeel::Colors::panelBackground);
+        g.fillRoundedRectangle(dropZone.toFloat(), 2.0f);
 
-        g.setColour(isDragOver ? juce::Colours::lightblue : juce::Colours::grey);
-        g.drawRoundedRectangle(dropZone.toFloat(), 10.0f, 2.0f);
+        g.setColour(isDragOver ? Mach1LookAndFeel::Colors::accent 
+                               : Mach1LookAndFeel::Colors::border);
+        g.drawRoundedRectangle(dropZone.toFloat(), 2.0f, 1.0f);
 
-        g.setFont(juce::FontOptions(20.0f));
+        g.setColour(Mach1LookAndFeel::Colors::textSecondary);
+        g.setFont(juce::FontOptions(14.0f));
         g.drawText("Drop audio/video files here",
                    dropZone, juce::Justification::centred);
     }
     else if (isDragOver)
     {
         // Show drag overlay when dragging over existing content
-        g.setColour(juce::Colours::lightblue.withAlpha(0.2f));
+        g.setColour(Mach1LookAndFeel::Colors::accent.withAlpha(0.1f));
         g.fillAll();
     }
 }

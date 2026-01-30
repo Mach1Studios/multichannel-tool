@@ -3,24 +3,26 @@
 */
 
 #include "LaneComponent.h"
+#include "Mach1LookAndFeel.h"
 
 LaneComponent::LaneComponent(Lane* lane, int displayIndex)
     : laneData(lane), currentDisplayIndex(displayIndex)
 {
-    // Setup name label
-    nameLabel.setFont(juce::FontOptions(14.0f).withStyle("Bold"));
+    // Setup name label with Mach1 colors
+    nameLabel.setFont(juce::FontOptions(12.0f).withStyle("Bold"));
     nameLabel.setJustificationType(juce::Justification::centredLeft);
-    nameLabel.setColour(juce::Label::textColourId, juce::Colours::white);
+    nameLabel.setColour(juce::Label::textColourId, Mach1LookAndFeel::Colors::textPrimary);
     addAndMakeVisible(nameLabel);
 
     // Setup info label
-    infoLabel.setFont(juce::FontOptions(11.0f));
+    infoLabel.setFont(juce::FontOptions(10.0f));
     infoLabel.setJustificationType(juce::Justification::centredLeft);
-    infoLabel.setColour(juce::Label::textColourId, juce::Colours::lightgrey);
+    infoLabel.setColour(juce::Label::textColourId, Mach1LookAndFeel::Colors::textSecondary);
     addAndMakeVisible(infoLabel);
 
-    // Setup delete button
-    deleteButton.setColour(juce::TextButton::buttonColourId, juce::Colours::darkred);
+    // Setup delete button with Mach1 style (red for delete)
+    deleteButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xFF3A1A1A));
+    deleteButton.setColour(juce::TextButton::textColourOffId, Mach1LookAndFeel::Colors::statusError);
     deleteButton.onClick = [this]()
     {
         listeners.call([this](Listener& l) { l.laneDeleteRequested(this); });
@@ -65,26 +67,27 @@ void LaneComponent::paint(juce::Graphics& g)
 {
     auto bounds = getLocalBounds();
 
-    // Background
-    g.setColour(juce::Colour(0xff2a2a2a));
-    g.fillRoundedRectangle(bounds.toFloat(), 5.0f);
+    // Background - Mach1 panel style
+    g.setColour(Mach1LookAndFeel::Colors::panelBackground);
+    g.fillRoundedRectangle(bounds.toFloat(), 2.0f);
 
-    // Border
-    g.setColour(juce::Colour(0xff3a3a3a));
-    g.drawRoundedRectangle(bounds.toFloat().reduced(0.5f), 5.0f, 1.0f);
+    // Border - subtle
+    g.setColour(Mach1LookAndFeel::Colors::border);
+    g.drawRoundedRectangle(bounds.toFloat().reduced(0.5f), 2.0f, 1.0f);
 
     // Drag handle area
     auto dragHandle = bounds.removeFromLeft(kDragHandleWidth);
-    g.setColour(juce::Colour(0xff444444));
-    g.fillRect(dragHandle.reduced(2, 5));
+    g.setColour(Mach1LookAndFeel::Colors::headerBackground);
+    g.fillRect(dragHandle.reduced(1, 4));
 
     // Draw grip lines
-    g.setColour(juce::Colour(0xff666666));
+    g.setColour(Mach1LookAndFeel::Colors::textSecondary);
     int gripY = dragHandle.getCentreY();
     for (int i = -2; i <= 2; ++i)
     {
         int y = gripY + i * 4;
-        g.drawHorizontalLine(y, (float)dragHandle.getX() + 5.0f, (float)dragHandle.getRight() - 5.0f);
+        g.drawHorizontalLine(y, static_cast<float>(dragHandle.getX()) + 5.0f, 
+                             static_cast<float>(dragHandle.getRight()) - 5.0f);
     }
 
     // Waveform area
@@ -110,12 +113,9 @@ void LaneComponent::drawWaveform(juce::Graphics& g, juce::Rectangle<int> bounds)
     if (envelope.numPoints == 0)
         return;
 
-    // Waveform color
-    g.setColour(juce::Colour(0xff4a9eff));
-
     float width = static_cast<float>(bounds.getWidth());
     float height = static_cast<float>(bounds.getHeight());
-    float centreY = bounds.getCentreY();
+    float centreY = static_cast<float>(bounds.getCentreY());
     float halfHeight = height * 0.5f;
 
     // Draw waveform as filled shape
@@ -136,7 +136,7 @@ void LaneComponent::drawWaveform(juce::Graphics& g, juce::Rectangle<int> bounds)
     // Draw top half (max values)
     for (size_t i = 0; i < static_cast<size_t>(envelope.numPoints); ++i)
     {
-        float x = bounds.getX() + (static_cast<float>(i) / static_cast<float>(envelope.numPoints - 1)) * width;
+        float x = static_cast<float>(bounds.getX()) + (static_cast<float>(i) / static_cast<float>(envelope.numPoints - 1)) * width;
         float y = centreY - envelope.maxValues[i] * scale * halfHeight;
 
         if (!pathStarted)
@@ -153,41 +153,41 @@ void LaneComponent::drawWaveform(juce::Graphics& g, juce::Rectangle<int> bounds)
     // Draw bottom half (min values) in reverse
     for (int i = envelope.numPoints - 1; i >= 0; --i)
     {
-        float x = bounds.getX() + (static_cast<float>(i) / static_cast<float>(envelope.numPoints - 1)) * width;
+        float x = static_cast<float>(bounds.getX()) + (static_cast<float>(i) / static_cast<float>(envelope.numPoints - 1)) * width;
         float y = centreY - envelope.minValues[static_cast<size_t>(i)] * scale * halfHeight;
         waveformPath.lineTo(x, y);
     }
 
     waveformPath.closeSubPath();
 
-    // Fill waveform
-    g.setColour(juce::Colour(0xff4a9eff).withAlpha(0.7f));
+    // Fill waveform with Mach1 accent color
+    g.setColour(Mach1LookAndFeel::Colors::waveformFill.withAlpha(0.6f));
     g.fillPath(waveformPath);
 
     // Draw outline
-    g.setColour(juce::Colour(0xff6ab0ff));
+    g.setColour(Mach1LookAndFeel::Colors::waveformOutline);
     g.strokePath(waveformPath, juce::PathStrokeType(1.0f));
 
     // Draw center line
-    g.setColour(juce::Colour(0xff555555));
+    g.setColour(Mach1LookAndFeel::Colors::border);
     g.drawHorizontalLine(static_cast<int>(centreY), static_cast<float>(bounds.getX()),
                          static_cast<float>(bounds.getRight()));
 }
 
 void LaneComponent::drawLoadingIndicator(juce::Graphics& g, juce::Rectangle<int> bounds)
 {
-    g.setColour(juce::Colours::grey);
-    g.setFont(12.0f);
+    g.setColour(Mach1LookAndFeel::Colors::textSecondary);
+    g.setFont(juce::FontOptions(10.0f));
     g.drawText("Loading waveform...", bounds, juce::Justification::centred);
 
     // Draw simple loading bar
-    auto barBounds = bounds.withSizeKeepingCentre(200, 4);
-    g.setColour(juce::Colour(0xff333333));
-    g.fillRoundedRectangle(barBounds.toFloat(), 2.0f);
+    auto barBounds = bounds.withSizeKeepingCentre(200, 3);
+    g.setColour(Mach1LookAndFeel::Colors::border);
+    g.fillRoundedRectangle(barBounds.toFloat(), 1.5f);
 
     // Animated fill would require timer - for now just show partial
-    g.setColour(juce::Colour(0xff4a9eff));
-    g.fillRoundedRectangle(barBounds.withWidth(barBounds.getWidth() / 3).toFloat(), 2.0f);
+    g.setColour(Mach1LookAndFeel::Colors::accent);
+    g.fillRoundedRectangle(barBounds.withWidth(barBounds.getWidth() / 3).toFloat(), 1.5f);
 }
 
 void LaneComponent::resized()

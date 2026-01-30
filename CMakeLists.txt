@@ -42,6 +42,7 @@ target_sources(ChannelStacker PRIVATE
     src/ffmpeg/FFProbe.cpp
     src/audio/WaveformExtractor.h
     src/audio/WaveformExtractor.cpp
+    src/ui/Mach1LookAndFeel.h
     src/ui/LaneComponent.h
     src/ui/LaneComponent.cpp
     src/ui/LaneListComponent.h
