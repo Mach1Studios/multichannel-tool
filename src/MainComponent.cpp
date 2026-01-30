@@ -264,102 +264,144 @@ void MainComponent::exportMultichannelWav(const juce::File& outputFile)
     if (lanes.empty())
         return;
 
-    // Build ffmpeg filter_complex command using 'join' filter for discrete channels
-    // Format: ffmpeg -i file1 -i file2 ... -filter_complex "..." output.wav
+    int numChannels = static_cast<int>(lanes.size());
+    
+    juce::Logger::writeToLog("exportMultichannelWav: " + juce::String(numChannels) + 
+                             " channels to " + outputFile.getFullPathName());
 
     juce::StringArray args;
     args.add(ffmpegLocator.getFFmpegPath().getFullPathName());
-    args.add("-v");
-    args.add("error");
     args.add("-y");  // Overwrite output
 
-    // Input files - we need unique input indices
-    std::map<juce::String, int> fileToIndex;
-    int inputIndex = 0;
-
+    // Check if all lanes come from the same source file/stream
+    // If so, we can use a simpler single pan filter
+    bool singleSource = true;
+    juce::File firstFile = lanes[0]->sourceFile;
+    int firstStream = lanes[0]->streamIndex;
+    
     for (auto* lane : lanes)
     {
-        auto key = lane->sourceFile.getFullPathName() + ":" + juce::String(lane->streamIndex);
-        if (fileToIndex.find(key) == fileToIndex.end())
+        if (lane->sourceFile != firstFile || lane->streamIndex != firstStream)
         {
-            fileToIndex[key] = inputIndex++;
-            args.add("-i");
-            args.add(lane->sourceFile.getFullPathName());
+            singleSource = false;
+            break;
         }
     }
 
-    int numChannels = static_cast<int>(lanes.size());
-
-    // Build filter_complex using 'join' filter for true discrete multichannel
     juce::String filterComplex;
-    juce::StringArray monoOutputs;
 
-    for (size_t i = 0; i < lanes.size(); ++i)
+    if (singleSource)
     {
-        auto* lane = lanes[i];
-        auto key = lane->sourceFile.getFullPathName() + ":" + juce::String(lane->streamIndex);
-        int idx = fileToIndex[key];
+        // Simple case: all channels from same source, use single pan filter
+        // Format: pan=Nc|c0=cX|c1=cY|...
+        args.add("-i");
+        args.add(firstFile.getFullPathName());
+        
+        filterComplex = "pan=" + juce::String(numChannels) + "c";
+        for (int i = 0; i < numChannels; ++i)
+        {
+            filterComplex += "|c" + juce::String(i) + "=c" + juce::String(lanes[static_cast<size_t>(i)]->channelIndex);
+        }
+    }
+    else
+    {
+        // Complex case: multiple source files, use channelsplit + amerge approach
+        std::map<juce::String, int> fileToIndex;
+        int inputIndex = 0;
 
-        // Extract single channel using pan filter to mono
-        juce::String panFilter = "[" + juce::String(idx) + ":a:" + juce::String(lane->streamIndex) + "]";
-        panFilter += "pan=mono|c0=c" + juce::String(lane->channelIndex);
-        panFilter += "[m" + juce::String(static_cast<int>(i)) + "]";
+        for (auto* lane : lanes)
+        {
+            auto key = lane->sourceFile.getFullPathName() + ":" + juce::String(lane->streamIndex);
+            if (fileToIndex.find(key) == fileToIndex.end())
+            {
+                fileToIndex[key] = inputIndex++;
+                args.add("-i");
+                args.add(lane->sourceFile.getFullPathName());
+            }
+        }
 
-        if (!filterComplex.isEmpty())
-            filterComplex += ";";
-        filterComplex += panFilter;
+        // Build filter: extract each channel to mono, then amerge
+        juce::StringArray monoOutputs;
 
-        monoOutputs.add("[m" + juce::String(static_cast<int>(i)) + "]");
+        for (size_t i = 0; i < lanes.size(); ++i)
+        {
+            auto* lane = lanes[i];
+            auto key = lane->sourceFile.getFullPathName() + ":" + juce::String(lane->streamIndex);
+            int idx = fileToIndex[key];
+
+            juce::String panFilter = "[" + juce::String(idx) + ":a]";
+            panFilter += "pan=mono|c0=c" + juce::String(lane->channelIndex);
+            panFilter += "[m" + juce::String(static_cast<int>(i)) + "]";
+
+            if (!filterComplex.isEmpty())
+                filterComplex += ";";
+            filterComplex += panFilter;
+
+            monoOutputs.add("[m" + juce::String(static_cast<int>(i)) + "]");
+        }
+
+        // Combine using amerge
+        filterComplex += ";";
+        for (const auto& out : monoOutputs)
+            filterComplex += out;
+        filterComplex += "amerge=inputs=" + juce::String(numChannels);
     }
 
-    // Use 'join' filter with explicit channel layout for discrete channels
-    // The channel layout "Nc" where N is number of channels creates discrete layout
-    filterComplex += ";";
-    for (const auto& out : monoOutputs)
-        filterComplex += out;
-    
-    // Build channel mapping for join filter
-    // map=0.0-0|1.0-1|... maps input 0 channel 0 to output channel 0, etc.
-    juce::String channelMap;
-    for (int i = 0; i < numChannels; ++i)
+    if (singleSource)
     {
-        if (!channelMap.isEmpty())
-            channelMap += "|";
-        channelMap += juce::String(i) + ".0-" + juce::String(i);
+        // Single source: use simple -af filter
+        args.add("-af");
+        args.add(filterComplex);
+    }
+    else
+    {
+        // Multiple sources: use -filter_complex with output label
+        filterComplex += "[out]";
+        args.add("-filter_complex");
+        args.add(filterComplex);
+        args.add("-map");
+        args.add("[out]");
     }
     
-    filterComplex += "join=inputs=" + juce::String(numChannels);
-    filterComplex += ":channel_layout=" + juce::String(numChannels) + "c";
-    filterComplex += ":map=" + channelMap;
-    filterComplex += "[out]";
-
-    args.add("-filter_complex");
-    args.add(filterComplex);
-    args.add("-map");
-    args.add("[out]");
     args.add("-c:a");
     args.add("pcm_s24le");
     args.add(outputFile.getFullPathName());
+    
+    // Debug: print the full command
+    juce::String cmdStr = "FFmpeg command:\n";
+    for (const auto& arg : args)
+        cmdStr += "  " + arg + "\n";
+    juce::Logger::writeToLog(cmdStr);
 
     // Run ffmpeg
     juce::Thread::launch([this, args, outputFile]()
     {
         juce::ChildProcess process;
-        if (process.start(args))
+        if (process.start(args, juce::ChildProcess::wantStdOut | juce::ChildProcess::wantStdErr))
         {
-            process.waitForProcessToFinish(60000);  // 60 second timeout
+            // Read any output (errors go to stderr)
+            juce::String output = process.readAllProcessOutput();
+            process.waitForProcessToFinish(120000);  // 120 second timeout
             auto exitCode = process.getExitCode();
+            
+            juce::Logger::writeToLog("FFmpeg exit code: " + juce::String(exitCode));
+            if (output.isNotEmpty())
+                juce::Logger::writeToLog("FFmpeg output: " + output);
 
-            juce::MessageManager::callAsync([this, exitCode, outputFile]()
+            juce::MessageManager::callAsync([this, exitCode, outputFile, output]()
             {
                 if (exitCode == 0)
                     updateStatus("Exported: " + outputFile.getFullPathName());
                 else
-                    updateStatus("Export failed (exit code " + juce::String(exitCode) + ")");
+                {
+                    updateStatus("Export failed (exit code " + juce::String(exitCode) + "): " + output.substring(0, 100));
+                    juce::Logger::writeToLog("Export error: " + output);
+                }
             });
         }
         else
         {
+            DBG("Failed to start ffmpeg process");
             juce::MessageManager::callAsync([this]()
             {
                 updateStatus("Failed to start ffmpeg process");
