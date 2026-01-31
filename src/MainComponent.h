@@ -75,6 +75,7 @@ private:
     void updatePlaybackUI();
     void scheduleAudioReload();  // Debounced reload
     void reloadAudioNow();       // Immediate reload
+    void checkFFmpegAvailability();  // First-launch check
 
     // Export helpers
     void exportMultichannelWav(const juce::File& outputFile, const ExportSettings& settings);

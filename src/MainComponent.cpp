@@ -128,6 +128,9 @@ MainComponent::MainComponent()
     updatePlaybackUI();
 
     setSize(1000, 700);
+    
+    // Check for ffmpeg after a short delay to allow window to appear
+    juce::Timer::callAfterDelay(500, [this]() { checkFFmpegAvailability(); });
 }
 
 MainComponent::~MainComponent()
@@ -1037,4 +1040,107 @@ void MainComponent::reloadAudioNow()
     // Reload audio for playback after lanes change
     auto lanes = projectModel.getLanes();
     audioPlayer->loadLanes(lanes);
+}
+
+void MainComponent::checkFFmpegAvailability()
+{
+    bool ffmpegOk = ffmpegLocator.isFFmpegAvailable();
+    bool ffprobeOk = ffmpegLocator.isFFprobeAvailable();
+    
+    if (ffmpegOk && ffprobeOk)
+    {
+        // All good - show version in status
+        auto version = ffmpegLocator.getFFmpegVersion();
+        if (version.isNotEmpty())
+        {
+            // Extract just "ffmpeg version X.X.X" part
+            auto versionLine = version.upToFirstOccurrenceOf(" Copyright", false, true);
+            updateStatus("Ready - " + versionLine);
+        }
+        return;
+    }
+    
+    // Build the message
+    juce::String missing;
+    if (!ffmpegOk && !ffprobeOk)
+        missing = "FFmpeg and FFprobe are";
+    else if (!ffmpegOk)
+        missing = "FFmpeg is";
+    else
+        missing = "FFprobe is";
+    
+    juce::String message = missing + " not found on your system.\n\n";
+    message += "ChannelStacker requires FFmpeg to analyze and export audio files.\n\n";
+    
+#if JUCE_MAC
+    message += "To install on macOS:\n\n";
+    message += "Using Homebrew (recommended):\n";
+    message += "    brew install ffmpeg\n\n";
+    message += "Or download from: https://ffmpeg.org/download.html\n";
+#elif JUCE_WINDOWS
+    message += "To install on Windows:\n\n";
+    message += "1. Download from: https://www.gyan.dev/ffmpeg/builds/\n";
+    message += "   (Choose 'ffmpeg-release-essentials.zip')\n\n";
+    message += "2. Extract to C:\\Program Files\\ffmpeg\n\n";
+    message += "3. Add C:\\Program Files\\ffmpeg\\bin to your PATH:\n";
+    message += "   - Search 'Environment Variables' in Start\n";
+    message += "   - Edit PATH, add the bin folder\n";
+#elif JUCE_LINUX
+    message += "To install on Linux:\n\n";
+    message += "Ubuntu/Debian:\n";
+    message += "    sudo apt install ffmpeg\n\n";
+    message += "Fedora:\n";
+    message += "    sudo dnf install ffmpeg\n\n";
+    message += "Arch:\n";
+    message += "    sudo pacman -S ffmpeg\n";
+#endif
+    
+    // Show dialog with platform-specific install button
+    auto options = juce::MessageBoxOptions()
+        .withIconType(juce::MessageBoxIconType::WarningIcon)
+        .withTitle("FFmpeg Required")
+        .withMessage(message)
+#if JUCE_MAC
+        .withButton("Install with Homebrew")
+        .withButton("Open Download Page")
+#elif JUCE_WINDOWS
+        .withButton("Open Download Page")
+#else
+        .withButton("OK")
+#endif
+        .withButton("Continue Anyway");
+    
+    juce::AlertWindow::showAsync(options, [](int result)
+    {
+#if JUCE_MAC
+        if (result == 1)
+        {
+            // Open Terminal with homebrew install command
+            juce::URL("x-apple.systempreferences:").launchInDefaultBrowser();
+            // Actually run the brew command in Terminal
+            juce::ChildProcess terminal;
+            terminal.start("open -a Terminal");
+            // Show instructions since we can't easily run the command
+            juce::AlertWindow::showMessageBoxAsync(
+                juce::MessageBoxIconType::InfoIcon,
+                "Install FFmpeg",
+                "A Terminal window will open.\n\n"
+                "If you have Homebrew installed, run:\n"
+                "    brew install ffmpeg\n\n"
+                "If you don't have Homebrew, first install it from:\n"
+                "    https://brew.sh");
+        }
+        else if (result == 2)
+        {
+            juce::URL("https://ffmpeg.org/download.html#build-mac").launchInDefaultBrowser();
+        }
+#elif JUCE_WINDOWS
+        if (result == 1)
+        {
+            juce::URL("https://www.gyan.dev/ffmpeg/builds/").launchInDefaultBrowser();
+        }
+#endif
+    });
+    
+    updateStatus("Warning: FFmpeg not found - features will be limited");
 }

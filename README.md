@@ -7,18 +7,83 @@ A cross-platform desktop application for stacking and managing audio channels fr
 - **Drag and Drop**: Drop audio or video files to automatically detect and import audio channels
 - **Waveform Display**: Visual waveform envelope for each channel lane
 - **Lane Reordering**: Drag lanes to reorder the channel stack
+- **Audio Preview**: Play back all channels mixed to stereo for auditioning
 - **Multiple Export Options**:
-  - Single multichannel WAV file
-  - Multiple mono WAV files
-  - Stereo pair WAV files
+  - Single multichannel file (WAV, AAC, Vorbis, Opus)
+  - Multiple mono files
+  - Stereo pair files
+  - Configurable bit depth and sample rate
 
-### Runtime Requirements
-- **FFmpeg** and **FFprobe** executables installed and accessible via PATH
+## Prerequisites: Installing FFmpeg
 
-The application uses ffmpeg/ffprobe as external processes for:
-- Probing media files for audio stream information
-- Decoding audio for waveform display
-- Exporting/converting audio
+ChannelStacker requires **FFmpeg** to be installed on your system. The app will show a helpful dialog on first launch if FFmpeg is not detected.
+
+### macOS
+
+**Option 1: Using Homebrew (Recommended)**
+```bash
+# Install Homebrew if you don't have it
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Install FFmpeg
+brew install ffmpeg
+```
+
+**Option 2: Using MacPorts**
+```bash
+sudo port install ffmpeg
+```
+
+**Option 3: Manual Download**
+1. Download a static build from [FFmpeg.org](https://ffmpeg.org/download.html#build-mac)
+2. Extract and move `ffmpeg` and `ffprobe` to `/usr/local/bin/`
+
+### Windows
+
+**Option 1: Using winget**
+```powershell
+winget install ffmpeg
+```
+
+**Option 2: Manual Download**
+1. Download from [gyan.dev](https://www.gyan.dev/ffmpeg/builds/) (choose "ffmpeg-release-essentials.zip")
+2. Extract to `C:\Program Files\ffmpeg`
+3. Add `C:\Program Files\ffmpeg\bin` to your PATH:
+   - Press Win+X, select "System"
+   - Click "Advanced system settings"
+   - Click "Environment Variables"
+   - Under "System variables", find "Path", click "Edit"
+   - Click "New" and add `C:\Program Files\ffmpeg\bin`
+   - Click "OK" on all dialogs
+4. Restart any open terminals or applications
+
+### Linux
+
+**Ubuntu/Debian:**
+```bash
+sudo apt update
+sudo apt install ffmpeg
+```
+
+**Fedora:**
+```bash
+sudo dnf install ffmpeg
+```
+
+**Arch Linux:**
+```bash
+sudo pacman -S ffmpeg
+```
+
+### Verifying Installation
+
+After installation, verify FFmpeg is working:
+```bash
+ffmpeg -version
+ffprobe -version
+```
+
+Both commands should display version information.
 
 ## Building
 
