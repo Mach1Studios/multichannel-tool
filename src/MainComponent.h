@@ -20,7 +20,7 @@ struct ExportSettings
     enum class ExportMode { Multichannel, MonoFiles, StereoPairs };
     enum class BitDepth { Bit16, Bit24, Bit32Float };
     enum class SampleRate { SR44100, SR48000, SR96000, SR192000, SROriginal };
-    enum class Codec { PCM_WAV, FLAC, ALAC, MP3, AAC };
+    enum class Codec { PCM_WAV, AAC, VORBIS, OPUS };
 
     ExportMode mode = ExportMode::Multichannel;
     BitDepth bitDepth = BitDepth::Bit24;

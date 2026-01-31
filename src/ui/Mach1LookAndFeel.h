@@ -74,6 +74,19 @@ public:
         setColour(juce::AlertWindow::backgroundColourId, Colors::panelBackground);
         setColour(juce::AlertWindow::textColourId, Colors::textPrimary);
         setColour(juce::AlertWindow::outlineColourId, Colors::border);
+        
+        // ComboBox colors
+        setColour(juce::ComboBox::backgroundColourId, Colors::buttonOff);
+        setColour(juce::ComboBox::textColourId, Colors::textPrimary);
+        setColour(juce::ComboBox::outlineColourId, Colors::border);
+        setColour(juce::ComboBox::arrowColourId, Colors::textSecondary);
+        setColour(juce::ComboBox::focusedOutlineColourId, Colors::accent);
+        
+        // PopupMenu colors
+        setColour(juce::PopupMenu::backgroundColourId, Colors::panelBackground);
+        setColour(juce::PopupMenu::textColourId, Colors::textPrimary);
+        setColour(juce::PopupMenu::highlightedBackgroundColourId, Colors::buttonHover);
+        setColour(juce::PopupMenu::highlightedTextColourId, Colors::textPrimary);
     }
 
     void drawButtonBackground(juce::Graphics& g,
@@ -172,6 +185,84 @@ public:
     int getDefaultScrollbarWidth() override
     {
         return 10;
+    }
+
+    void drawComboBox(juce::Graphics& g, int width, int height, bool /*isButtonDown*/,
+                      int /*buttonX*/, int /*buttonY*/, int /*buttonW*/, int /*buttonH*/,
+                      juce::ComboBox& box) override
+    {
+        auto bounds = juce::Rectangle<int>(0, 0, width, height).toFloat().reduced(0.5f);
+        
+        // Background
+        g.setColour(box.findColour(juce::ComboBox::backgroundColourId));
+        g.fillRoundedRectangle(bounds, 2.0f);
+        
+        // Border
+        g.setColour(box.findColour(juce::ComboBox::outlineColourId));
+        g.drawRoundedRectangle(bounds, 2.0f, 1.0f);
+        
+        // Arrow
+        auto arrowZone = juce::Rectangle<int>(width - 20, 0, 15, height).toFloat();
+        juce::Path arrow;
+        arrow.addTriangle(arrowZone.getCentreX() - 4, arrowZone.getCentreY() - 2,
+                          arrowZone.getCentreX() + 4, arrowZone.getCentreY() - 2,
+                          arrowZone.getCentreX(), arrowZone.getCentreY() + 3);
+        g.setColour(box.findColour(juce::ComboBox::arrowColourId));
+        g.fillPath(arrow);
+    }
+
+    void positionComboBoxText(juce::ComboBox& box, juce::Label& label) override
+    {
+        label.setBounds(8, 0, box.getWidth() - 28, box.getHeight());
+        label.setFont(juce::FontOptions(11.0f));
+    }
+
+    void drawPopupMenuBackground(juce::Graphics& g, int width, int height) override
+    {
+        auto bounds = juce::Rectangle<int>(0, 0, width, height).toFloat();
+        
+        g.setColour(Colors::panelBackground);
+        g.fillRoundedRectangle(bounds, 2.0f);
+        
+        g.setColour(Colors::border);
+        g.drawRoundedRectangle(bounds.reduced(0.5f), 2.0f, 1.0f);
+    }
+
+    void drawPopupMenuItem(juce::Graphics& g, const juce::Rectangle<int>& area,
+                           bool isSeparator, bool isActive, bool isHighlighted,
+                           bool /*isTicked*/, bool /*hasSubMenu*/,
+                           const juce::String& text, const juce::String& /*shortcutKeyText*/,
+                           const juce::Drawable* /*icon*/, const juce::Colour* /*textColour*/) override
+    {
+        if (isSeparator)
+        {
+            auto r = area.reduced(5, 0).toFloat();
+            g.setColour(Colors::border);
+            g.fillRect(r.removeFromTop(r.getHeight() / 2).removeFromBottom(1));
+            return;
+        }
+        
+        auto textColour = isActive ? Colors::textPrimary : Colors::textSecondary;
+        
+        if (isHighlighted && isActive)
+        {
+            g.setColour(Colors::buttonHover);
+            g.fillRect(area);
+        }
+        
+        g.setColour(textColour);
+        g.setFont(juce::FontOptions(11.0f));
+        
+        auto textArea = area.reduced(10, 0);
+        g.drawText(text, textArea, juce::Justification::centredLeft, true);
+    }
+
+    void getIdealPopupMenuItemSize(const juce::String& text, bool /*isSeparator*/,
+                                   int standardMenuItemHeight, int& idealWidth, int& idealHeight) override
+    {
+        idealHeight = standardMenuItemHeight > 0 ? standardMenuItemHeight : 24;
+        // Estimate width based on character count (simple approach to avoid deprecated APIs)
+        idealWidth = static_cast<int>(text.length()) * 7 + 30;
     }
 
 private:

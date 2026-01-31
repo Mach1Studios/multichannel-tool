@@ -17,31 +17,17 @@ juce::String ExportSettings::getCodecArgs() const
         case Codec::PCM_WAV:
             switch (bitDepth)
             {
-                case BitDepth::Bit16:    return "pcm_s16le";
-                case BitDepth::Bit24:    return "pcm_s24le";
+                case BitDepth::Bit16:      return "pcm_s16le";
+                case BitDepth::Bit24:      return "pcm_s24le";
                 case BitDepth::Bit32Float: return "pcm_f32le";
             }
             break;
-        case Codec::FLAC:
-            switch (bitDepth)
-            {
-                case BitDepth::Bit16:    return "flac -sample_fmt s16";
-                case BitDepth::Bit24:    return "flac -sample_fmt s32";
-                case BitDepth::Bit32Float: return "flac -sample_fmt s32";  // FLAC doesn't support float
-            }
-            break;
-        case Codec::ALAC:
-            switch (bitDepth)
-            {
-                case BitDepth::Bit16:    return "alac -sample_fmt s16p";
-                case BitDepth::Bit24:    return "alac -sample_fmt s32p";
-                case BitDepth::Bit32Float: return "alac -sample_fmt s32p";  // ALAC doesn't support float
-            }
-            break;
-        case Codec::MP3:
-            return "libmp3lame -b:a 320k";
         case Codec::AAC:
             return "aac -b:a 256k";
+        case Codec::VORBIS:
+            return "libvorbis -q:a 6";  // Quality 6 is ~192kbps VBR
+        case Codec::OPUS:
+            return "libopus -b:a 128k";
     }
     return "pcm_s24le";
 }
@@ -64,10 +50,9 @@ juce::String ExportSettings::getFileExtension() const
     switch (codec)
     {
         case Codec::PCM_WAV:  return "wav";
-        case Codec::FLAC:     return "flac";
-        case Codec::ALAC:     return "m4a";
-        case Codec::MP3:      return "mp3";
         case Codec::AAC:      return "m4a";
+        case Codec::VORBIS:   return "ogg";
+        case Codec::OPUS:     return "opus";
     }
     return "wav";
 }
@@ -336,13 +321,34 @@ void MainComponent::showExportDialog()
         return;
     }
 
-    // Create a custom dialog component
+    // Create a custom dialog component with Mach1 styling
     auto* dialogContent = new juce::Component();
-    dialogContent->setSize(350, 220);
+    dialogContent->setSize(360, 230);
+
+    // Helper to style labels
+    auto styleLabel = [](juce::Label* label) {
+        label->setColour(juce::Label::textColourId, Mach1LookAndFeel::Colors::textPrimary);
+        label->setFont(juce::FontOptions(11.0f));
+    };
+
+    // Helper to style combo boxes
+    auto styleCombo = [](juce::ComboBox* combo) {
+        combo->setColour(juce::ComboBox::backgroundColourId, Mach1LookAndFeel::Colors::buttonOff);
+        combo->setColour(juce::ComboBox::textColourId, Mach1LookAndFeel::Colors::textPrimary);
+        combo->setColour(juce::ComboBox::outlineColourId, Mach1LookAndFeel::Colors::border);
+        combo->setColour(juce::ComboBox::arrowColourId, Mach1LookAndFeel::Colors::textSecondary);
+    };
+
+    // Helper to style buttons
+    auto styleButton = [](juce::TextButton* btn) {
+        btn->setColour(juce::TextButton::buttonColourId, Mach1LookAndFeel::Colors::buttonOff);
+        btn->setColour(juce::TextButton::textColourOffId, Mach1LookAndFeel::Colors::textPrimary);
+    };
 
     // Export mode combo
     auto* modeLabel = new juce::Label("modeLabel", "Export Mode:");
-    modeLabel->setBounds(10, 10, 100, 24);
+    modeLabel->setBounds(15, 15, 100, 24);
+    styleLabel(modeLabel);
     dialogContent->addAndMakeVisible(modeLabel);
 
     auto* modeCombo = new juce::ComboBox("modeCombo");
@@ -350,27 +356,30 @@ void MainComponent::showExportDialog()
     modeCombo->addItem("Multiple Mono Files", 2);
     modeCombo->addItem("Stereo Pairs", 3);
     modeCombo->setSelectedId(1);
-    modeCombo->setBounds(120, 10, 210, 24);
+    modeCombo->setBounds(125, 15, 220, 24);
+    styleCombo(modeCombo);
     dialogContent->addAndMakeVisible(modeCombo);
 
     // Codec combo
     auto* codecLabel = new juce::Label("codecLabel", "Format:");
-    codecLabel->setBounds(10, 45, 100, 24);
+    codecLabel->setBounds(15, 50, 100, 24);
+    styleLabel(codecLabel);
     dialogContent->addAndMakeVisible(codecLabel);
 
     auto* codecCombo = new juce::ComboBox("codecCombo");
-    codecCombo->addItem("WAV (PCM)", 1);
-    codecCombo->addItem("FLAC (Lossless)", 2);
-    codecCombo->addItem("ALAC (Apple Lossless)", 3);
-    codecCombo->addItem("MP3 (320kbps)", 4);
-    codecCombo->addItem("AAC (256kbps)", 5);
+    codecCombo->addItem("WAV", 1);
+    codecCombo->addItem("AAC", 2);
+    codecCombo->addItem("Vorbis (OGG)", 3);
+    codecCombo->addItem("Opus", 4);
     codecCombo->setSelectedId(1);
-    codecCombo->setBounds(120, 45, 210, 24);
+    codecCombo->setBounds(125, 50, 220, 24);
+    styleCombo(codecCombo);
     dialogContent->addAndMakeVisible(codecCombo);
 
     // Bit depth combo
     auto* bitDepthLabel = new juce::Label("bitDepthLabel", "Bit Depth:");
-    bitDepthLabel->setBounds(10, 80, 100, 24);
+    bitDepthLabel->setBounds(15, 85, 100, 24);
+    styleLabel(bitDepthLabel);
     dialogContent->addAndMakeVisible(bitDepthLabel);
 
     auto* bitDepthCombo = new juce::ComboBox("bitDepthCombo");
@@ -378,33 +387,50 @@ void MainComponent::showExportDialog()
     bitDepthCombo->addItem("24-bit", 2);
     bitDepthCombo->addItem("32-bit Float", 3);
     bitDepthCombo->setSelectedId(2);  // Default to 24-bit
-    bitDepthCombo->setBounds(120, 80, 210, 24);
+    bitDepthCombo->setBounds(125, 85, 220, 24);
+    styleCombo(bitDepthCombo);
     dialogContent->addAndMakeVisible(bitDepthCombo);
 
     // Sample rate combo
     auto* sampleRateLabel = new juce::Label("sampleRateLabel", "Sample Rate:");
-    sampleRateLabel->setBounds(10, 115, 100, 24);
+    sampleRateLabel->setBounds(15, 120, 100, 24);
+    styleLabel(sampleRateLabel);
     dialogContent->addAndMakeVisible(sampleRateLabel);
 
     auto* sampleRateCombo = new juce::ComboBox("sampleRateCombo");
-    sampleRateCombo->addItem("Original (no conversion)", 1);
+    sampleRateCombo->addItem("Original", 1);
     sampleRateCombo->addItem("44.1 kHz", 2);
     sampleRateCombo->addItem("48 kHz", 3);
     sampleRateCombo->addItem("96 kHz", 4);
     sampleRateCombo->addItem("192 kHz", 5);
     sampleRateCombo->setSelectedId(1);  // Default to original
-    sampleRateCombo->setBounds(120, 115, 210, 24);
+    sampleRateCombo->setBounds(125, 120, 220, 24);
+    styleCombo(sampleRateCombo);
     dialogContent->addAndMakeVisible(sampleRateCombo);
 
     // Update bit depth options based on codec selection
+    // WAV supports bit depth, lossy codecs don't
     codecCombo->onChange = [codecCombo, bitDepthCombo]()
     {
         int codecId = codecCombo->getSelectedId();
-        bool isLossy = (codecId == 4 || codecId == 5);  // MP3 or AAC
-        bitDepthCombo->setEnabled(!isLossy);
-        if (isLossy)
-            bitDepthCombo->setSelectedId(1);  // Lossy codecs don't have bit depth control
+        bool isWav = (codecId == 1);  // Only WAV supports bit depth selection
+        bitDepthCombo->setEnabled(isWav);
+        if (!isWav)
+            bitDepthCombo->setSelectedId(2);  // Default to 24-bit equivalent
     };
+
+    // Export button
+    auto* exportBtn = new juce::TextButton("Export");
+    exportBtn->setBounds(175, 170, 80, 28);
+    styleButton(exportBtn);
+    exportBtn->setColour(juce::TextButton::textColourOffId, Mach1LookAndFeel::Colors::statusActive);
+    dialogContent->addAndMakeVisible(exportBtn);
+
+    // Cancel button
+    auto* cancelBtn = new juce::TextButton("Cancel");
+    cancelBtn->setBounds(265, 170, 80, 28);
+    styleButton(cancelBtn);
+    dialogContent->addAndMakeVisible(cancelBtn);
 
     // Create the dialog
     juce::DialogWindow::LaunchOptions options;
@@ -412,14 +438,13 @@ void MainComponent::showExportDialog()
     options.content.setOwned(dialogContent);
     options.dialogBackgroundColour = Mach1LookAndFeel::Colors::panelBackground;
     options.escapeKeyTriggersCloseButton = true;
-    options.useNativeTitleBar = true;
+    options.useNativeTitleBar = false;
     options.resizable = false;
 
     auto* dialog = options.create();
+    dialog->setColour(juce::DocumentWindow::backgroundColourId, Mach1LookAndFeel::Colors::panelBackground);
     
-    // Add export and cancel buttons manually
-    auto* exportBtn = new juce::TextButton("Export");
-    exportBtn->setBounds(170, 160, 80, 30);
+    // Set button callbacks after dialog is created
     exportBtn->onClick = [this, dialog, modeCombo, codecCombo, bitDepthCombo, sampleRateCombo]()
     {
         ExportSettings settings;
@@ -436,10 +461,9 @@ void MainComponent::showExportDialog()
         switch (codecCombo->getSelectedId())
         {
             case 1: settings.codec = ExportSettings::Codec::PCM_WAV; break;
-            case 2: settings.codec = ExportSettings::Codec::FLAC; break;
-            case 3: settings.codec = ExportSettings::Codec::ALAC; break;
-            case 4: settings.codec = ExportSettings::Codec::MP3; break;
-            case 5: settings.codec = ExportSettings::Codec::AAC; break;
+            case 2: settings.codec = ExportSettings::Codec::AAC; break;
+            case 3: settings.codec = ExportSettings::Codec::VORBIS; break;
+            case 4: settings.codec = ExportSettings::Codec::OPUS; break;
         }
         
         // Set bit depth
@@ -465,16 +489,12 @@ void MainComponent::showExportDialog()
         
         performExport(settings);
     };
-    dialogContent->addAndMakeVisible(exportBtn);
 
-    auto* cancelBtn = new juce::TextButton("Cancel");
-    cancelBtn->setBounds(260, 160, 80, 30);
     cancelBtn->onClick = [dialog]()
     {
         dialog->exitModalState(0);
         delete dialog;
     };
-    dialogContent->addAndMakeVisible(cancelBtn);
 
     dialog->enterModalState(true, nullptr, true);
 }
