@@ -14,10 +14,29 @@
 #include "audio/WaveformExtractor.h"
 #include "audio/AudioPlayer.h"
 
+// Export settings structure
+struct ExportSettings
+{
+    enum class ExportMode { Multichannel, MonoFiles, StereoPairs };
+    enum class BitDepth { Bit16, Bit24, Bit32Float };
+    enum class SampleRate { SR44100, SR48000, SR96000, SR192000, SROriginal };
+    enum class Codec { PCM_WAV, FLAC, ALAC, MP3, AAC };
+
+    ExportMode mode = ExportMode::Multichannel;
+    BitDepth bitDepth = BitDepth::Bit24;
+    SampleRate sampleRate = SampleRate::SROriginal;
+    Codec codec = Codec::PCM_WAV;
+
+    juce::String getCodecArgs() const;
+    juce::String getSampleRateArgs() const;
+    juce::String getFileExtension() const;
+};
+
 class MainComponent : public juce::Component,
                       public juce::FileDragAndDropTarget,
                       public ProjectModel::Listener,
-                      public AudioPlayer::Listener
+                      public AudioPlayer::Listener,
+                      private juce::Timer
 {
 public:
     MainComponent();
@@ -43,19 +62,24 @@ public:
     void playbackStarted() override;
     void playbackStopped() override;
     void playbackPositionChanged(double positionSeconds) override;
+    void loadStateChanged(AudioPlayer::LoadState newState) override;
 
 private:
+    // Timer callback for debounced audio reload
+    void timerCallback() override;
+    
     void handleDroppedFile(const juce::File& file);
     void showExportDialog();
-    void performExport(int exportMode);
+    void performExport(const ExportSettings& settings);
     void updateStatus(const juce::String& message);
     void updatePlaybackUI();
-    void reloadAudio();
+    void scheduleAudioReload();  // Debounced reload
+    void reloadAudioNow();       // Immediate reload
 
     // Export helpers
-    void exportMultichannelWav(const juce::File& outputFile);
-    void exportMonoWavFiles(const juce::File& outputDir);
-    void exportStereoPairs(const juce::File& outputDir);
+    void exportMultichannelWav(const juce::File& outputFile, const ExportSettings& settings);
+    void exportMonoWavFiles(const juce::File& outputDir, const ExportSettings& settings);
+    void exportStereoPairs(const juce::File& outputDir, const ExportSettings& settings);
 
     ProjectModel projectModel;
     FFmpegLocator ffmpegLocator;
@@ -76,11 +100,15 @@ private:
 
     // Drag state
     bool isDragOver = false;
+    
+    // Debounce state for audio reload
+    bool audioReloadPending = false;
 
     // Constants
     static constexpr int kToolbarHeight = 50;
     static constexpr int kFooterHeight = 20;
     static constexpr int kDropZoneMinHeight = 100;
+    static constexpr int kAudioReloadDebounceMs = 200;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)
 };

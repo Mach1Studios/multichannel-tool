@@ -67,9 +67,9 @@ private:
     // Note: Drag handling is done by parent LaneListComponent
 
     // Layout constants
-    static constexpr int kHeaderHeight = 30;
+    static constexpr int kHeaderHeight = 20;
     static constexpr int kDragHandleWidth = 20;
-    static constexpr int kDeleteButtonWidth = 30;
+    static constexpr int kDeleteButtonWidth = 20;
     static constexpr int kMargin = 5;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(LaneComponent)

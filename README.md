@@ -85,22 +85,6 @@ export APPLE_APP_PASSWORD="@keychain:notarytool-password"
 make release
 ```
 
-### Makefile Targets
-
-| Target | Description |
-|--------|-------------|
-| `make` | Build the app |
-| `make run` | Build and run |
-| `make clean` | Remove build artifacts |
-| `make sign-adhoc` | Ad-hoc sign for local testing |
-| `make dmg-unsigned` | Create unsigned DMG |
-| `make dmg` | Create signed DMG |
-| `make notarize` | Notarize for Gatekeeper |
-| `make release` | Full release workflow |
-| `make install` | Install to /Applications |
-| `make list-identities` | List signing identities |
-| `make help` | Show all commands |
-
 ## Usage
 
 1. **Add Files**: Drag audio or video files into the application window
@@ -117,11 +101,9 @@ make release
 - Uses `juce::ChildProcess` to run ffmpeg/ffprobe as external commands
 - Audio is decoded to raw float32 PCM for waveform computation
 - Waveform envelope uses 4000 points for responsive display
-- Export uses ffmpeg's `filter_complex` with `pan` and `amerge` filters
+- Export uses ffmpeg's `asplit` with `pan=mono` and `amerge` filters
 - No libav* linking - pure subprocess approach for simplicity and licensing flexibility
 
 ## Future Enhancements
 
-- Audio preview/playback
-- More export formats (FLAC, AIFF, etc.)
 - Batch processing

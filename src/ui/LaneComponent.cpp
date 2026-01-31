@@ -181,13 +181,13 @@ void LaneComponent::drawLoadingIndicator(juce::Graphics& g, juce::Rectangle<int>
     g.drawText("Loading waveform...", bounds, juce::Justification::centred);
 
     // Draw simple loading bar
-    auto barBounds = bounds.withSizeKeepingCentre(200, 3);
-    g.setColour(Mach1LookAndFeel::Colors::border);
-    g.fillRoundedRectangle(barBounds.toFloat(), 1.5f);
+    // auto barBounds = bounds.withSizeKeepingCentre(200, 3);
+    // g.setColour(Mach1LookAndFeel::Colors::border);
+    // g.fillRoundedRectangle(barBounds.toFloat(), 1.5f);
 
-    // Animated fill would require timer - for now just show partial
-    g.setColour(Mach1LookAndFeel::Colors::accent);
-    g.fillRoundedRectangle(barBounds.withWidth(barBounds.getWidth() / 3).toFloat(), 1.5f);
+    // // Animated fill would require timer - for now just show partial
+    // g.setColour(Mach1LookAndFeel::Colors::accent);
+    // g.fillRoundedRectangle(barBounds.withWidth(barBounds.getWidth() / 3).toFloat(), 1.5f);
 }
 
 void LaneComponent::resized()

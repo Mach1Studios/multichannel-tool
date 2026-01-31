@@ -6,6 +6,76 @@
 #include "ui/Mach1LookAndFeel.h"
 #include "BinaryData.h"
 
+//==============================================================================
+// ExportSettings implementation
+//==============================================================================
+
+juce::String ExportSettings::getCodecArgs() const
+{
+    switch (codec)
+    {
+        case Codec::PCM_WAV:
+            switch (bitDepth)
+            {
+                case BitDepth::Bit16:    return "pcm_s16le";
+                case BitDepth::Bit24:    return "pcm_s24le";
+                case BitDepth::Bit32Float: return "pcm_f32le";
+            }
+            break;
+        case Codec::FLAC:
+            switch (bitDepth)
+            {
+                case BitDepth::Bit16:    return "flac -sample_fmt s16";
+                case BitDepth::Bit24:    return "flac -sample_fmt s32";
+                case BitDepth::Bit32Float: return "flac -sample_fmt s32";  // FLAC doesn't support float
+            }
+            break;
+        case Codec::ALAC:
+            switch (bitDepth)
+            {
+                case BitDepth::Bit16:    return "alac -sample_fmt s16p";
+                case BitDepth::Bit24:    return "alac -sample_fmt s32p";
+                case BitDepth::Bit32Float: return "alac -sample_fmt s32p";  // ALAC doesn't support float
+            }
+            break;
+        case Codec::MP3:
+            return "libmp3lame -b:a 320k";
+        case Codec::AAC:
+            return "aac -b:a 256k";
+    }
+    return "pcm_s24le";
+}
+
+juce::String ExportSettings::getSampleRateArgs() const
+{
+    switch (sampleRate)
+    {
+        case SampleRate::SR44100:   return "44100";
+        case SampleRate::SR48000:   return "48000";
+        case SampleRate::SR96000:   return "96000";
+        case SampleRate::SR192000:  return "192000";
+        case SampleRate::SROriginal: return "";  // Empty means don't resample
+    }
+    return "";
+}
+
+juce::String ExportSettings::getFileExtension() const
+{
+    switch (codec)
+    {
+        case Codec::PCM_WAV:  return "wav";
+        case Codec::FLAC:     return "flac";
+        case Codec::ALAC:     return "m4a";
+        case Codec::MP3:      return "mp3";
+        case Codec::AAC:      return "m4a";
+    }
+    return "wav";
+}
+
+//==============================================================================
+// MainComponent implementation
+//==============================================================================
+
 MainComponent::MainComponent()
 {
     // Initialize FFmpeg tools
@@ -266,71 +336,198 @@ void MainComponent::showExportDialog()
         return;
     }
 
-    auto* alertWindow = new juce::AlertWindow("Export Options",
-                                               "Choose export format:",
-                                               juce::MessageBoxIconType::QuestionIcon);
+    // Create a custom dialog component
+    auto* dialogContent = new juce::Component();
+    dialogContent->setSize(350, 220);
 
-    alertWindow->addButton("Single Multichannel WAV", 1);
-    alertWindow->addButton("Multiple Mono WAVs", 2);
-    alertWindow->addButton("Stereo Pairs", 3);
-    alertWindow->addButton("Cancel", 0);
+    // Export mode combo
+    auto* modeLabel = new juce::Label("modeLabel", "Export Mode:");
+    modeLabel->setBounds(10, 10, 100, 24);
+    dialogContent->addAndMakeVisible(modeLabel);
 
-    alertWindow->enterModalState(true, juce::ModalCallbackFunction::create(
-        [this, alertWindow](int result)
+    auto* modeCombo = new juce::ComboBox("modeCombo");
+    modeCombo->addItem("Single Multichannel File", 1);
+    modeCombo->addItem("Multiple Mono Files", 2);
+    modeCombo->addItem("Stereo Pairs", 3);
+    modeCombo->setSelectedId(1);
+    modeCombo->setBounds(120, 10, 210, 24);
+    dialogContent->addAndMakeVisible(modeCombo);
+
+    // Codec combo
+    auto* codecLabel = new juce::Label("codecLabel", "Format:");
+    codecLabel->setBounds(10, 45, 100, 24);
+    dialogContent->addAndMakeVisible(codecLabel);
+
+    auto* codecCombo = new juce::ComboBox("codecCombo");
+    codecCombo->addItem("WAV (PCM)", 1);
+    codecCombo->addItem("FLAC (Lossless)", 2);
+    codecCombo->addItem("ALAC (Apple Lossless)", 3);
+    codecCombo->addItem("MP3 (320kbps)", 4);
+    codecCombo->addItem("AAC (256kbps)", 5);
+    codecCombo->setSelectedId(1);
+    codecCombo->setBounds(120, 45, 210, 24);
+    dialogContent->addAndMakeVisible(codecCombo);
+
+    // Bit depth combo
+    auto* bitDepthLabel = new juce::Label("bitDepthLabel", "Bit Depth:");
+    bitDepthLabel->setBounds(10, 80, 100, 24);
+    dialogContent->addAndMakeVisible(bitDepthLabel);
+
+    auto* bitDepthCombo = new juce::ComboBox("bitDepthCombo");
+    bitDepthCombo->addItem("16-bit", 1);
+    bitDepthCombo->addItem("24-bit", 2);
+    bitDepthCombo->addItem("32-bit Float", 3);
+    bitDepthCombo->setSelectedId(2);  // Default to 24-bit
+    bitDepthCombo->setBounds(120, 80, 210, 24);
+    dialogContent->addAndMakeVisible(bitDepthCombo);
+
+    // Sample rate combo
+    auto* sampleRateLabel = new juce::Label("sampleRateLabel", "Sample Rate:");
+    sampleRateLabel->setBounds(10, 115, 100, 24);
+    dialogContent->addAndMakeVisible(sampleRateLabel);
+
+    auto* sampleRateCombo = new juce::ComboBox("sampleRateCombo");
+    sampleRateCombo->addItem("Original (no conversion)", 1);
+    sampleRateCombo->addItem("44.1 kHz", 2);
+    sampleRateCombo->addItem("48 kHz", 3);
+    sampleRateCombo->addItem("96 kHz", 4);
+    sampleRateCombo->addItem("192 kHz", 5);
+    sampleRateCombo->setSelectedId(1);  // Default to original
+    sampleRateCombo->setBounds(120, 115, 210, 24);
+    dialogContent->addAndMakeVisible(sampleRateCombo);
+
+    // Update bit depth options based on codec selection
+    codecCombo->onChange = [codecCombo, bitDepthCombo]()
+    {
+        int codecId = codecCombo->getSelectedId();
+        bool isLossy = (codecId == 4 || codecId == 5);  // MP3 or AAC
+        bitDepthCombo->setEnabled(!isLossy);
+        if (isLossy)
+            bitDepthCombo->setSelectedId(1);  // Lossy codecs don't have bit depth control
+    };
+
+    // Create the dialog
+    juce::DialogWindow::LaunchOptions options;
+    options.dialogTitle = "Export Options";
+    options.content.setOwned(dialogContent);
+    options.dialogBackgroundColour = Mach1LookAndFeel::Colors::panelBackground;
+    options.escapeKeyTriggersCloseButton = true;
+    options.useNativeTitleBar = true;
+    options.resizable = false;
+
+    auto* dialog = options.create();
+    
+    // Add export and cancel buttons manually
+    auto* exportBtn = new juce::TextButton("Export");
+    exportBtn->setBounds(170, 160, 80, 30);
+    exportBtn->onClick = [this, dialog, modeCombo, codecCombo, bitDepthCombo, sampleRateCombo]()
+    {
+        ExportSettings settings;
+        
+        // Set mode
+        switch (modeCombo->getSelectedId())
         {
-            delete alertWindow;
-            if (result > 0)
-                performExport(result);
-        }));
+            case 1: settings.mode = ExportSettings::ExportMode::Multichannel; break;
+            case 2: settings.mode = ExportSettings::ExportMode::MonoFiles; break;
+            case 3: settings.mode = ExportSettings::ExportMode::StereoPairs; break;
+        }
+        
+        // Set codec
+        switch (codecCombo->getSelectedId())
+        {
+            case 1: settings.codec = ExportSettings::Codec::PCM_WAV; break;
+            case 2: settings.codec = ExportSettings::Codec::FLAC; break;
+            case 3: settings.codec = ExportSettings::Codec::ALAC; break;
+            case 4: settings.codec = ExportSettings::Codec::MP3; break;
+            case 5: settings.codec = ExportSettings::Codec::AAC; break;
+        }
+        
+        // Set bit depth
+        switch (bitDepthCombo->getSelectedId())
+        {
+            case 1: settings.bitDepth = ExportSettings::BitDepth::Bit16; break;
+            case 2: settings.bitDepth = ExportSettings::BitDepth::Bit24; break;
+            case 3: settings.bitDepth = ExportSettings::BitDepth::Bit32Float; break;
+        }
+        
+        // Set sample rate
+        switch (sampleRateCombo->getSelectedId())
+        {
+            case 1: settings.sampleRate = ExportSettings::SampleRate::SROriginal; break;
+            case 2: settings.sampleRate = ExportSettings::SampleRate::SR44100; break;
+            case 3: settings.sampleRate = ExportSettings::SampleRate::SR48000; break;
+            case 4: settings.sampleRate = ExportSettings::SampleRate::SR96000; break;
+            case 5: settings.sampleRate = ExportSettings::SampleRate::SR192000; break;
+        }
+        
+        dialog->exitModalState(0);
+        delete dialog;
+        
+        performExport(settings);
+    };
+    dialogContent->addAndMakeVisible(exportBtn);
+
+    auto* cancelBtn = new juce::TextButton("Cancel");
+    cancelBtn->setBounds(260, 160, 80, 30);
+    cancelBtn->onClick = [dialog]()
+    {
+        dialog->exitModalState(0);
+        delete dialog;
+    };
+    dialogContent->addAndMakeVisible(cancelBtn);
+
+    dialog->enterModalState(true, nullptr, true);
 }
 
-void MainComponent::performExport(int exportMode)
+void MainComponent::performExport(const ExportSettings& settings)
 {
-    if (exportMode == 1)
+    juce::String extension = settings.getFileExtension();
+    
+    if (settings.mode == ExportSettings::ExportMode::Multichannel)
     {
-        // Single multichannel WAV
+        // Single multichannel file
         auto chooser = std::make_shared<juce::FileChooser>(
-            "Save Multichannel WAV",
+            "Save Multichannel File",
             juce::File::getSpecialLocation(juce::File::userDocumentsDirectory),
-            "*.wav");
+            "*." + extension);
 
         chooser->launchAsync(juce::FileBrowserComponent::saveMode |
                             juce::FileBrowserComponent::canSelectFiles,
-            [this, chooser](const juce::FileChooser& fc)
+            [this, chooser, settings, extension](const juce::FileChooser& fc)
             {
                 auto file = fc.getResult();
                 if (file != juce::File())
                 {
-                    exportMultichannelWav(file.withFileExtension("wav"));
+                    exportMultichannelWav(file.withFileExtension(extension), settings);
                 }
             });
     }
-    else if (exportMode == 2 || exportMode == 3)
+    else
     {
-        // Mono WAVs or stereo pairs - select output directory
+        // Mono files or stereo pairs - select output directory
         auto chooser = std::make_shared<juce::FileChooser>(
             "Select Output Directory",
             juce::File::getSpecialLocation(juce::File::userDocumentsDirectory));
 
         chooser->launchAsync(juce::FileBrowserComponent::openMode |
                             juce::FileBrowserComponent::canSelectDirectories,
-            [this, chooser, exportMode](const juce::FileChooser& fc)
+            [this, chooser, settings](const juce::FileChooser& fc)
             {
                 auto dir = fc.getResult();
                 if (dir != juce::File() && dir.isDirectory())
                 {
-                    if (exportMode == 2)
-                        exportMonoWavFiles(dir);
+                    if (settings.mode == ExportSettings::ExportMode::MonoFiles)
+                        exportMonoWavFiles(dir, settings);
                     else
-                        exportStereoPairs(dir);
+                        exportStereoPairs(dir, settings);
                 }
             });
     }
 }
 
-void MainComponent::exportMultichannelWav(const juce::File& outputFile)
+void MainComponent::exportMultichannelWav(const juce::File& outputFile, const ExportSettings& settings)
 {
-    updateStatus("Exporting multichannel WAV...");
+    updateStatus("Exporting multichannel file...");
 
     auto lanes = projectModel.getLanes();
     if (lanes.empty())
@@ -345,98 +542,117 @@ void MainComponent::exportMultichannelWav(const juce::File& outputFile)
     args.add(ffmpegLocator.getFFmpegPath().getFullPathName());
     args.add("-y");  // Overwrite output
 
-    // Check if all lanes come from the same source file/stream
-    // If so, we can use a simpler single pan filter
-    bool singleSource = true;
-    juce::File firstFile = lanes[0]->sourceFile;
-    int firstStream = lanes[0]->streamIndex;
-    
+    // Build a map of unique source file+stream combinations
+    std::map<juce::String, int> sourceToIndex;
+    int inputIndex = 0;
+
     for (auto* lane : lanes)
     {
-        if (lane->sourceFile != firstFile || lane->streamIndex != firstStream)
+        auto key = lane->sourceFile.getFullPathName() + ":" + juce::String(lane->streamIndex);
+        if (sourceToIndex.find(key) == sourceToIndex.end())
         {
-            singleSource = false;
-            break;
+            sourceToIndex[key] = inputIndex++;
+            args.add("-i");
+            args.add(lane->sourceFile.getFullPathName());
         }
     }
 
+    // Build filter_complex using asplit + pan=mono + amerge approach
     juce::String filterComplex;
+    juce::StringArray monoOutputs;
 
-    if (singleSource)
+    // Count how many times each source is used
+    std::map<juce::String, int> sourceUsageCount;
+    for (auto* lane : lanes)
     {
-        // Simple case: all channels from same source, use single pan filter
-        // Format: pan=Nc|c0=cX|c1=cY|...
-        args.add("-i");
-        args.add(firstFile.getFullPathName());
-        
-        filterComplex = "pan=" + juce::String(numChannels) + "c";
-        for (int i = 0; i < numChannels; ++i)
-        {
-            filterComplex += "|c" + juce::String(i) + "=c" + juce::String(lanes[static_cast<size_t>(i)]->channelIndex);
-        }
+        auto key = lane->sourceFile.getFullPathName() + ":" + juce::String(lane->streamIndex);
+        sourceUsageCount[key]++;
     }
-    else
+
+    // Create asplit filters for sources used multiple times
+    std::map<juce::String, juce::StringArray> sourceSplitLabels;
+    for (const auto& [key, count] : sourceUsageCount)
     {
-        // Complex case: multiple source files, use channelsplit + amerge approach
-        std::map<juce::String, int> fileToIndex;
-        int inputIndex = 0;
-
-        for (auto* lane : lanes)
+        int idx = sourceToIndex[key];
+        if (count > 1)
         {
-            auto key = lane->sourceFile.getFullPathName() + ":" + juce::String(lane->streamIndex);
-            if (fileToIndex.find(key) == fileToIndex.end())
+            juce::String asplitFilter = "[" + juce::String(idx) + ":a]asplit=" + juce::String(count);
+            juce::StringArray labels;
+            for (int i = 0; i < count; ++i)
             {
-                fileToIndex[key] = inputIndex++;
-                args.add("-i");
-                args.add(lane->sourceFile.getFullPathName());
+                juce::String label = "[s" + juce::String(idx) + "_" + juce::String(i) + "]";
+                labels.add(label);
+                asplitFilter += label;
             }
-        }
-
-        // Build filter: extract each channel to mono, then amerge
-        juce::StringArray monoOutputs;
-
-        for (size_t i = 0; i < lanes.size(); ++i)
-        {
-            auto* lane = lanes[i];
-            auto key = lane->sourceFile.getFullPathName() + ":" + juce::String(lane->streamIndex);
-            int idx = fileToIndex[key];
-
-            juce::String panFilter = "[" + juce::String(idx) + ":a]";
-            panFilter += "pan=mono|c0=c" + juce::String(lane->channelIndex);
-            panFilter += "[m" + juce::String(static_cast<int>(i)) + "]";
-
+            sourceSplitLabels[key] = labels;
+            
             if (!filterComplex.isEmpty())
                 filterComplex += ";";
-            filterComplex += panFilter;
+            filterComplex += asplitFilter;
+        }
+    }
 
-            monoOutputs.add("[m" + juce::String(static_cast<int>(i)) + "]");
+    // Track which split index we're on for each source
+    std::map<juce::String, int> sourceSplitIndex;
+    for (const auto& [key, _] : sourceUsageCount)
+        sourceSplitIndex[key] = 0;
+
+    // Create pan=mono filter for each lane
+    for (size_t i = 0; i < lanes.size(); ++i)
+    {
+        auto* lane = lanes[i];
+        auto key = lane->sourceFile.getFullPathName() + ":" + juce::String(lane->streamIndex);
+        int idx = sourceToIndex[key];
+
+        juce::String inputLabel;
+        if (sourceUsageCount[key] > 1)
+        {
+            int splitIdx = sourceSplitIndex[key]++;
+            inputLabel = sourceSplitLabels[key][splitIdx];
+        }
+        else
+        {
+            inputLabel = "[" + juce::String(idx) + ":a]";
         }
 
-        // Combine using amerge
-        filterComplex += ";";
-        for (const auto& out : monoOutputs)
-            filterComplex += out;
-        filterComplex += "amerge=inputs=" + juce::String(numChannels);
+        juce::String monoLabel = "[m" + juce::String(static_cast<int>(i)) + "]";
+        juce::String panFilter = inputLabel + "pan=mono|c0=c" + juce::String(lane->channelIndex) + monoLabel;
+
+        if (!filterComplex.isEmpty())
+            filterComplex += ";";
+        filterComplex += panFilter;
+
+        monoOutputs.add(monoLabel);
     }
 
-    if (singleSource)
+    // Combine all mono channels using amerge
+    filterComplex += ";";
+    for (const auto& out : monoOutputs)
+        filterComplex += out;
+    filterComplex += "amerge=inputs=" + juce::String(numChannels) + "[out]";
+
+    args.add("-filter_complex");
+    args.add(filterComplex);
+    args.add("-map");
+    args.add("[out]");
+    
+    // Add sample rate conversion if requested
+    juce::String sampleRateStr = settings.getSampleRateArgs();
+    if (sampleRateStr.isNotEmpty())
     {
-        // Single source: use simple -af filter
-        args.add("-af");
-        args.add(filterComplex);
-    }
-    else
-    {
-        // Multiple sources: use -filter_complex with output label
-        filterComplex += "[out]";
-        args.add("-filter_complex");
-        args.add(filterComplex);
-        args.add("-map");
-        args.add("[out]");
+        args.add("-ar");
+        args.add(sampleRateStr);
     }
     
+    // Add codec settings
+    juce::String codecArgs = settings.getCodecArgs();
+    juce::StringArray codecParts;
+    codecParts.addTokens(codecArgs, " ", "");
     args.add("-c:a");
-    args.add("pcm_s24le");
+    args.add(codecParts[0]);
+    for (int i = 1; i < codecParts.size(); ++i)
+        args.add(codecParts[i]);
+    
     args.add(outputFile.getFullPathName());
     
     // Debug: print the full command
@@ -451,9 +667,8 @@ void MainComponent::exportMultichannelWav(const juce::File& outputFile)
         juce::ChildProcess process;
         if (process.start(args, juce::ChildProcess::wantStdOut | juce::ChildProcess::wantStdErr))
         {
-            // Read any output (errors go to stderr)
             juce::String output = process.readAllProcessOutput();
-            process.waitForProcessToFinish(120000);  // 120 second timeout
+            process.waitForProcessToFinish(120000);
             auto exitCode = process.getExitCode();
             
             juce::Logger::writeToLog("FFmpeg exit code: " + juce::String(exitCode));
@@ -466,14 +681,13 @@ void MainComponent::exportMultichannelWav(const juce::File& outputFile)
                     updateStatus("Exported: " + outputFile.getFullPathName());
                 else
                 {
-                    updateStatus("Export failed (exit code " + juce::String(exitCode) + "): " + output.substring(0, 100));
+                    updateStatus("Export failed (exit code " + juce::String(exitCode) + ")");
                     juce::Logger::writeToLog("Export error: " + output);
                 }
             });
         }
         else
         {
-            DBG("Failed to start ffmpeg process");
             juce::MessageManager::callAsync([this]()
             {
                 updateStatus("Failed to start ffmpeg process");
@@ -482,11 +696,12 @@ void MainComponent::exportMultichannelWav(const juce::File& outputFile)
     });
 }
 
-void MainComponent::exportMonoWavFiles(const juce::File& outputDir)
+void MainComponent::exportMonoWavFiles(const juce::File& outputDir, const ExportSettings& settings)
 {
-    updateStatus("Exporting mono WAV files...");
+    updateStatus("Exporting mono files...");
 
     auto lanes = projectModel.getLanes();
+    juce::String extension = settings.getFileExtension();
 
     // Export each lane as a separate mono file
     for (size_t i = 0; i < lanes.size(); ++i)
@@ -494,7 +709,7 @@ void MainComponent::exportMonoWavFiles(const juce::File& outputDir)
         auto* lane = lanes[i];
         auto outputFile = outputDir.getChildFile(
             "channel_" + juce::String(static_cast<int>(i) + 1).paddedLeft('0', 2) + "_" +
-            lane->sourceFile.getFileNameWithoutExtension() + ".wav");
+            lane->sourceFile.getFileNameWithoutExtension() + "." + extension);
 
         juce::StringArray args;
         args.add(ffmpegLocator.getFFmpegPath().getFullPathName());
@@ -503,12 +718,33 @@ void MainComponent::exportMonoWavFiles(const juce::File& outputDir)
         args.add("-y");
         args.add("-i");
         args.add(lane->sourceFile.getFullPathName());
-        args.add("-map");
-        args.add("0:a:" + juce::String(lane->streamIndex));
+        
+        // Use filter_complex with proper input stream reference
+        juce::String filterComplex = "[0:a:" + juce::String(lane->streamIndex) + "]";
+        filterComplex += "pan=mono|c0=c" + juce::String(lane->channelIndex) + "[out]";
+        
         args.add("-filter_complex");
-        args.add("pan=mono|c0=c" + juce::String(lane->channelIndex));
+        args.add(filterComplex);
+        args.add("-map");
+        args.add("[out]");
+        
+        // Add sample rate conversion if requested
+        juce::String sampleRateStr = settings.getSampleRateArgs();
+        if (sampleRateStr.isNotEmpty())
+        {
+            args.add("-ar");
+            args.add(sampleRateStr);
+        }
+        
+        // Add codec settings
+        juce::String codecArgs = settings.getCodecArgs();
+        juce::StringArray codecParts;
+        codecParts.addTokens(codecArgs, " ", "");
         args.add("-c:a");
-        args.add("pcm_s24le");
+        args.add(codecParts[0]);
+        for (int j = 1; j < codecParts.size(); ++j)
+            args.add(codecParts[j]);
+        
         args.add(outputFile.getFullPathName());
 
         size_t laneIndex = i;
@@ -516,10 +752,14 @@ void MainComponent::exportMonoWavFiles(const juce::File& outputDir)
         juce::Thread::launch([this, args, outputFile, laneIndex, totalLanes]()
         {
             juce::ChildProcess process;
-            if (process.start(args))
+            if (process.start(args, juce::ChildProcess::wantStdOut | juce::ChildProcess::wantStdErr))
             {
+                juce::String output = process.readAllProcessOutput();
                 process.waitForProcessToFinish(60000);
                 auto exitCode = process.getExitCode();
+                
+                if (exitCode != 0)
+                    juce::Logger::writeToLog("Mono export error: " + output);
 
                 juce::MessageManager::callAsync([this, exitCode, outputFile, laneIndex, totalLanes]()
                 {
@@ -538,12 +778,13 @@ void MainComponent::exportMonoWavFiles(const juce::File& outputDir)
     }
 }
 
-void MainComponent::exportStereoPairs(const juce::File& outputDir)
+void MainComponent::exportStereoPairs(const juce::File& outputDir, const ExportSettings& settings)
 {
     updateStatus("Exporting stereo pairs...");
 
     auto lanes = projectModel.getLanes();
     int numPairs = (static_cast<int>(lanes.size()) + 1) / 2;
+    juce::String extension = settings.getFileExtension();
 
     for (int pair = 0; pair < numPairs; ++pair)
     {
@@ -551,7 +792,7 @@ void MainComponent::exportStereoPairs(const juce::File& outputDir)
         size_t rightIdx = static_cast<size_t>(pair * 2 + 1);
 
         auto outputFile = outputDir.getChildFile(
-            "stereo_" + juce::String(pair + 1).paddedLeft('0', 2) + ".wav");
+            "stereo_" + juce::String(pair + 1).paddedLeft('0', 2) + "." + extension);
 
         juce::StringArray args;
         args.add(ffmpegLocator.getFFmpegPath().getFullPathName());
@@ -565,12 +806,14 @@ void MainComponent::exportStereoPairs(const juce::File& outputDir)
         args.add(leftLane->sourceFile.getFullPathName());
 
         Lane* rightLane = nullptr;
+        bool separateInputs = false;
         if (rightIdx < lanes.size())
         {
             rightLane = lanes[rightIdx];
             if (rightLane->sourceFile != leftLane->sourceFile ||
                 rightLane->streamIndex != leftLane->streamIndex)
             {
+                separateInputs = true;
                 args.add("-i");
                 args.add(rightLane->sourceFile.getFullPathName());
             }
@@ -586,8 +829,7 @@ void MainComponent::exportStereoPairs(const juce::File& outputDir)
         // Right channel (or duplicate left if no right)
         if (rightLane != nullptr)
         {
-            int rightInput = (rightLane->sourceFile != leftLane->sourceFile ||
-                              rightLane->streamIndex != leftLane->streamIndex) ? 1 : 0;
+            int rightInput = separateInputs ? 1 : 0;
             filterComplex += "[" + juce::String(rightInput) + ":a:" +
                              juce::String(rightLane->streamIndex) + "]";
             filterComplex += "pan=mono|c0=c" + juce::String(rightLane->channelIndex) + "[right];";
@@ -604,17 +846,37 @@ void MainComponent::exportStereoPairs(const juce::File& outputDir)
         args.add(filterComplex);
         args.add("-map");
         args.add("[out]");
+        
+        // Add sample rate conversion if requested
+        juce::String sampleRateStr = settings.getSampleRateArgs();
+        if (sampleRateStr.isNotEmpty())
+        {
+            args.add("-ar");
+            args.add(sampleRateStr);
+        }
+        
+        // Add codec settings
+        juce::String codecArgs = settings.getCodecArgs();
+        juce::StringArray codecParts;
+        codecParts.addTokens(codecArgs, " ", "");
         args.add("-c:a");
-        args.add("pcm_s24le");
+        args.add(codecParts[0]);
+        for (int j = 1; j < codecParts.size(); ++j)
+            args.add(codecParts[j]);
+        
         args.add(outputFile.getFullPathName());
 
         juce::Thread::launch([this, args, outputFile, pair, numPairs]()
         {
             juce::ChildProcess process;
-            if (process.start(args))
+            if (process.start(args, juce::ChildProcess::wantStdOut | juce::ChildProcess::wantStdErr))
             {
+                juce::String output = process.readAllProcessOutput();
                 process.waitForProcessToFinish(60000);
                 auto exitCode = process.getExitCode();
+                
+                if (exitCode != 0)
+                    juce::Logger::writeToLog("Stereo export error: " + output);
 
                 juce::MessageManager::callAsync([this, exitCode, outputFile, pair, numPairs]()
                 {
@@ -638,16 +900,34 @@ void MainComponent::updateStatus(const juce::String& message)
     statusLabel.setText(message, juce::dontSendNotification);
 }
 
+void MainComponent::timerCallback()
+{
+    stopTimer();
+    
+    if (audioReloadPending)
+    {
+        audioReloadPending = false;
+        reloadAudioNow();
+    }
+}
+
+void MainComponent::scheduleAudioReload()
+{
+    // Debounce audio reloads - wait for lane additions to settle
+    audioReloadPending = true;
+    startTimer(kAudioReloadDebounceMs);
+}
+
 void MainComponent::laneAdded(Lane* /*lane*/, int /*index*/)
 {
     repaint();
-    reloadAudio();
+    scheduleAudioReload();  // Debounced
 }
 
 void MainComponent::laneRemoved(int /*index*/)
 {
     repaint();
-    reloadAudio();
+    scheduleAudioReload();  // Debounced
     if (projectModel.getLaneCount() == 0)
         updateStatus("Drop audio/video files here to add channels");
 }
@@ -655,7 +935,7 @@ void MainComponent::laneRemoved(int /*index*/)
 void MainComponent::lanesReordered()
 {
     // Lane list handles its own update
-    reloadAudio();
+    reloadAudioNow();  // Immediate for reorder (user expects instant feedback)
 }
 
 void MainComponent::laneWaveformUpdated(Lane* /*lane*/)
@@ -678,16 +958,61 @@ void MainComponent::playbackPositionChanged(double /*positionSeconds*/)
     // Could update a position display here
 }
 
+void MainComponent::loadStateChanged(AudioPlayer::LoadState newState)
+{
+    updatePlaybackUI();
+    
+    switch (newState)
+    {
+        case AudioPlayer::LoadState::Empty:
+            break;
+        case AudioPlayer::LoadState::Loading:
+            updateStatus("Loading audio for preview...");
+            break;
+        case AudioPlayer::LoadState::Ready:
+            updateStatus("Ready to play");
+            break;
+        case AudioPlayer::LoadState::Error:
+            updateStatus("Failed to load audio for preview");
+            break;
+    }
+}
+
 void MainComponent::updatePlaybackUI()
 {
     bool playing = audioPlayer->isPlaying();
-    playButton.setButtonText(playing ? "Pause" : "Play");
-    playButton.setColour(juce::TextButton::textColourOffId,
-                         playing ? Mach1LookAndFeel::Colors::statusWarning
-                                 : Mach1LookAndFeel::Colors::statusActive);
+    bool ready = audioPlayer->isReady();
+    bool loading = audioPlayer->isLoading();
+    
+    // Update play button state
+    if (loading)
+    {
+        playButton.setButtonText("Loading...");
+        playButton.setEnabled(false);
+        playButton.setColour(juce::TextButton::textColourOffId,
+                             Mach1LookAndFeel::Colors::textSecondary);
+    }
+    else if (playing)
+    {
+        playButton.setButtonText("Pause");
+        playButton.setEnabled(true);
+        playButton.setColour(juce::TextButton::textColourOffId,
+                             Mach1LookAndFeel::Colors::statusWarning);
+    }
+    else
+    {
+        playButton.setButtonText("Play");
+        playButton.setEnabled(ready);
+        playButton.setColour(juce::TextButton::textColourOffId,
+                             ready ? Mach1LookAndFeel::Colors::statusActive
+                                   : Mach1LookAndFeel::Colors::textSecondary);
+    }
+    
+    // Stop button always enabled if playing
+    stopButton.setEnabled(playing);
 }
 
-void MainComponent::reloadAudio()
+void MainComponent::reloadAudioNow()
 {
     // Reload audio for playback after lanes change
     auto lanes = projectModel.getLanes();

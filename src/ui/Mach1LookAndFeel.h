@@ -30,11 +30,11 @@ public:
         static inline const juce::Colour buttonHover     { 0xFF2A2A2A };  // Button hover
         static inline const juce::Colour buttonDown      { 0xFF3A3A3A };  // Button pressed
         
-        static inline const juce::Colour accent          { 0xFF4A9EFF };  // Accent/highlight color
-        static inline const juce::Colour accentDim       { 0xFF2A5A9A };  // Dimmed accent
+        static inline const juce::Colour accent          { 0xFF808080 };  // Accent/highlight color
+        static inline const juce::Colour accentDim       { 0xFF0D0D0D };  // Dimmed accent
         
-        static inline const juce::Colour waveformFill    { 0xFF4A9EFF };  // Waveform fill
-        static inline const juce::Colour waveformOutline { 0xFF6AB0FF };  // Waveform outline
+        static inline const juce::Colour waveformFill    { 0xFF808080 };  // Waveform fill
+        static inline const juce::Colour waveformOutline { 0xFF2A2A2A };  // Waveform outline
         
         static inline const juce::Colour statusActive    { 0xFF4CAF50 };  // Green - active/streaming
         static inline const juce::Colour statusWarning   { 0xFFFF9800 };  // Orange - warning/stale

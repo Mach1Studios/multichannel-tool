@@ -15,6 +15,14 @@
 class AudioPlayer : public juce::AudioSource
 {
 public:
+    enum class LoadState
+    {
+        Empty,      // No lanes loaded
+        Loading,    // Currently decoding audio
+        Ready,      // Audio loaded and ready to play
+        Error       // Loading failed
+    };
+
     AudioPlayer(FFmpegLocator& locator);
     ~AudioPlayer() override;
 
@@ -27,6 +35,11 @@ public:
     void play();
     void stop();
     bool isPlaying() const { return playing; }
+    
+    // Loading state
+    LoadState getLoadState() const { return loadState.load(); }
+    bool isReady() const { return loadState.load() == LoadState::Ready; }
+    bool isLoading() const { return loadState.load() == LoadState::Loading; }
 
     // AudioSource interface
     void prepareToPlay(int samplesPerBlockExpected, double sampleRate) override;
@@ -41,27 +54,40 @@ public:
         virtual void playbackStarted() = 0;
         virtual void playbackStopped() = 0;
         virtual void playbackPositionChanged(double positionSeconds) = 0;
+        virtual void loadStateChanged(LoadState newState) = 0;
     };
 
     void addListener(Listener* listener);
     void removeListener(Listener* listener);
 
 private:
-    void decodeAudioAsync();
-    void mixToStereo(juce::AudioBuffer<float>& stereoBuffer);
+    // Info needed for decoding (copied from lanes to avoid threading issues)
+    struct DecodeInfo
+    {
+        juce::String sourceFilePath;  // Store path as string, not File
+        int streamIndex = 0;
+        int channelIndex = 0;
+        int totalChannels = 0;
+        double sampleRate = 48000.0;
+    };
+
+    void decodeAudioAsync(std::vector<DecodeInfo> infos, juce::String ffmpeg, int generation);
+    void setLoadState(LoadState newState);
+    void onDecodeComplete(juce::AudioBuffer<float> buffer, double sampleRate, int generation);
+    void onDecodeError(int generation);
 
     FFmpegLocator& ffmpegLocator;
     juce::AudioDeviceManager deviceManager;
     juce::AudioSourcePlayer audioSourcePlayer;
 
-    // Decoded audio buffer (interleaved stereo)
+    // Decoded audio buffer (stereo)
     juce::AudioBuffer<float> audioBuffer;
     int readPosition = 0;
     std::atomic<bool> playing{ false };
-    std::atomic<bool> audioLoaded{ false };
+    std::atomic<LoadState> loadState{ LoadState::Empty };
+    std::atomic<int> loadGeneration{ 0 };  // Incremented on each load to cancel stale decodes
+    std::atomic<bool> shuttingDown{ false };  // Flag to prevent callbacks during shutdown
 
-    // Current lanes info
-    std::vector<Lane*> currentLanes;
     double currentSampleRate = 48000.0;
 
     juce::ListenerList<Listener> listeners;
