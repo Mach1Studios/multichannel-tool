@@ -4,6 +4,7 @@
 
 #include "MainComponent.h"
 #include "ui/Mach1LookAndFeel.h"
+#include "BinaryData.h"
 
 MainComponent::MainComponent()
 {
@@ -40,6 +41,10 @@ MainComponent::MainComponent()
     statusLabel.setFont(juce::FontOptions(11.0f));
     addAndMakeVisible(statusLabel);
 
+    // Load logo from binary data
+    logoDrawable = juce::Drawable::createFromImageData(
+        BinaryData::mach1logo_png, BinaryData::mach1logo_pngSize);
+
     updateStatus("Drop audio/video files here to add channels");
 
     setSize(1000, 700);
@@ -56,7 +61,9 @@ void MainComponent::paint(juce::Graphics& g)
     g.fillAll(Mach1LookAndFeel::Colors::background);
 
     // Draw drop zone indicator
-    auto dropZone = getLocalBounds().reduced(10).withTrimmedTop(kToolbarHeight);
+    auto dropZone = getLocalBounds().reduced(10)
+        .withTrimmedTop(kToolbarHeight)
+        .withTrimmedBottom(kFooterHeight);
 
     if (projectModel.getLaneCount() == 0)
     {
@@ -80,11 +87,32 @@ void MainComponent::paint(juce::Graphics& g)
         g.setColour(Mach1LookAndFeel::Colors::accent.withAlpha(0.1f));
         g.fillAll();
     }
+
+    // Draw footer background
+    auto footerBounds = getLocalBounds().removeFromBottom(kFooterHeight);
+    g.setColour(Mach1LookAndFeel::Colors::headerBackground);
+    g.fillRect(footerBounds);
+
+    // Draw separator line
+    g.setColour(Mach1LookAndFeel::Colors::border);
+    g.drawHorizontalLine(footerBounds.getY(), 0.0f, static_cast<float>(getWidth()));
+
+    // Draw logo in footer
+    if (logoDrawable != nullptr)
+    {
+        auto logoBounds = footerBounds.reduced(10, 5).removeFromLeft(120);
+        logoDrawable->drawWithin(g, logoBounds.toFloat(),
+                                  juce::RectanglePlacement::centredLeft |
+                                  juce::RectanglePlacement::onlyReduceInSize, 1.0f);
+    }
 }
 
 void MainComponent::resized()
 {
     auto bounds = getLocalBounds();
+
+    // Footer at bottom
+    bounds.removeFromBottom(kFooterHeight);
 
     // Toolbar at top
     auto toolbar = bounds.removeFromTop(kToolbarHeight);
@@ -94,9 +122,11 @@ void MainComponent::resized()
     toolbar.removeFromLeft(10);
     clearButton.setBounds(toolbar.removeFromLeft(100));
     toolbar.removeFromLeft(20);
+    
+    // Status label fills the rest
     statusLabel.setBounds(toolbar);
 
-    // Lane list fills the rest
+    // Lane list fills the middle
     bounds.reduce(10, 0);
     bounds.removeFromBottom(10);
     laneListComponent->setBounds(bounds);

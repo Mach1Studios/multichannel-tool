@@ -22,9 +22,19 @@ add_subdirectory(JUCE)
 # Define the GUI application
 juce_add_gui_app(ChannelStacker
     PRODUCT_NAME "ChannelStacker"
-    COMPANY_NAME "ChannelStacker"
-    BUNDLE_ID "com.channelstacker.app"
+    COMPANY_NAME "Mach1"
+    BUNDLE_ID "com.mach1.channelstacker"
     VERSION "1.0.0"
+    ICON_BIG "${CMAKE_CURRENT_SOURCE_DIR}/res/icon.png"
+    ICON_SMALL "${CMAKE_CURRENT_SOURCE_DIR}/res/icon.png"
+)
+
+# Binary resources (logo, icons)
+juce_add_binary_data(ChannelStackerResources
+    NAMESPACE BinaryData
+    SOURCES
+        res/mach1logo.png
+        res/icon.png
 )
 
 # Source files
@@ -62,8 +72,9 @@ target_compile_definitions(ChannelStacker PRIVATE
     JUCE_APPLICATION_VERSION_STRING="$<TARGET_PROPERTY:ChannelStacker,JUCE_VERSION>"
 )
 
-# Link JUCE modules
+# Link JUCE modules and resources
 target_link_libraries(ChannelStacker PRIVATE
+    ChannelStackerResources
     juce::juce_core
     juce::juce_data_structures
     juce::juce_events

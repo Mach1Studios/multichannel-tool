@@ -59,11 +59,15 @@ private:
     juce::TextButton clearButton{ "Clear All" };
     juce::Label statusLabel;
 
+    // Logo
+    std::unique_ptr<juce::Drawable> logoDrawable;
+
     // Drag state
     bool isDragOver = false;
 
     // Constants
     static constexpr int kToolbarHeight = 50;
+    static constexpr int kFooterHeight = 40;
     static constexpr int kDropZoneMinHeight = 100;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)
