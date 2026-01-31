@@ -12,12 +12,35 @@ MainComponent::MainComponent()
     ffprobe = std::make_unique<FFProbe>(ffmpegLocator);
     waveformExtractor = std::make_unique<WaveformExtractor>(ffmpegLocator);
 
+    // Initialize audio player
+    audioPlayer = std::make_unique<AudioPlayer>(ffmpegLocator);
+    audioPlayer->addListener(this);
+    audioPlayer->initialize();
+
     // Register as listener
     projectModel.addListener(this);
 
     // Setup lane list
     laneListComponent = std::make_unique<LaneListComponent>(projectModel);
     addAndMakeVisible(*laneListComponent);
+
+    // Setup play button
+    playButton.setColour(juce::TextButton::buttonColourId, Mach1LookAndFeel::Colors::buttonOff);
+    playButton.setColour(juce::TextButton::textColourOffId, Mach1LookAndFeel::Colors::statusActive);
+    playButton.onClick = [this]()
+    {
+        if (audioPlayer->isPlaying())
+            audioPlayer->stop();
+        else
+            audioPlayer->play();
+    };
+    addAndMakeVisible(playButton);
+
+    // Setup stop button
+    stopButton.setColour(juce::TextButton::buttonColourId, Mach1LookAndFeel::Colors::buttonOff);
+    stopButton.setColour(juce::TextButton::textColourOffId, Mach1LookAndFeel::Colors::textPrimary);
+    stopButton.onClick = [this]() { audioPlayer->stop(); };
+    addAndMakeVisible(stopButton);
 
     // Setup export button with Mach1 style
     exportButton.setColour(juce::TextButton::buttonColourId, Mach1LookAndFeel::Colors::buttonOff);
@@ -30,6 +53,7 @@ MainComponent::MainComponent()
     clearButton.setColour(juce::TextButton::textColourOffId, Mach1LookAndFeel::Colors::textPrimary);
     clearButton.onClick = [this]()
     {
+        audioPlayer->stop();
         projectModel.clearAllLanes();
         updateStatus("All lanes cleared");
     };
@@ -46,12 +70,15 @@ MainComponent::MainComponent()
         BinaryData::mach1logo_png, BinaryData::mach1logo_pngSize);
 
     updateStatus("Drop audio/video files here to add channels");
+    updatePlaybackUI();
 
     setSize(1000, 700);
 }
 
 MainComponent::~MainComponent()
 {
+    audioPlayer->removeListener(this);
+    audioPlayer->shutdown();
     projectModel.removeListener(this);
     waveformExtractor->cancelAll();
 }
@@ -90,7 +117,7 @@ void MainComponent::paint(juce::Graphics& g)
 
     // Draw footer background
     auto footerBounds = getLocalBounds().removeFromBottom(kFooterHeight);
-    g.setColour(Mach1LookAndFeel::Colors::headerBackground);
+    g.setColour(Mach1LookAndFeel::Colors::background);
     g.fillRect(footerBounds);
 
     // Draw separator line
@@ -100,9 +127,9 @@ void MainComponent::paint(juce::Graphics& g)
     // Draw logo in footer
     if (logoDrawable != nullptr)
     {
-        auto logoBounds = footerBounds.reduced(10, 5).removeFromLeft(120);
+        auto logoBounds = footerBounds.reduced(10, 5).removeFromLeft(60);
         logoDrawable->drawWithin(g, logoBounds.toFloat(),
-                                  juce::RectanglePlacement::centredLeft |
+                                  juce::RectanglePlacement::yMid |
                                   juce::RectanglePlacement::onlyReduceInSize, 1.0f);
     }
 }
@@ -118,6 +145,13 @@ void MainComponent::resized()
     auto toolbar = bounds.removeFromTop(kToolbarHeight);
     toolbar.reduce(10, 10);
 
+    // Playback controls
+    playButton.setBounds(toolbar.removeFromLeft(60));
+    toolbar.removeFromLeft(5);
+    stopButton.setBounds(toolbar.removeFromLeft(60));
+    toolbar.removeFromLeft(15);
+
+    // Export/Clear buttons
     exportButton.setBounds(toolbar.removeFromLeft(100));
     toolbar.removeFromLeft(10);
     clearButton.setBounds(toolbar.removeFromLeft(100));
@@ -607,11 +641,13 @@ void MainComponent::updateStatus(const juce::String& message)
 void MainComponent::laneAdded(Lane* /*lane*/, int /*index*/)
 {
     repaint();
+    reloadAudio();
 }
 
 void MainComponent::laneRemoved(int /*index*/)
 {
     repaint();
+    reloadAudio();
     if (projectModel.getLaneCount() == 0)
         updateStatus("Drop audio/video files here to add channels");
 }
@@ -619,9 +655,41 @@ void MainComponent::laneRemoved(int /*index*/)
 void MainComponent::lanesReordered()
 {
     // Lane list handles its own update
+    reloadAudio();
 }
 
 void MainComponent::laneWaveformUpdated(Lane* /*lane*/)
 {
     // Lane components will be notified via the model
+}
+
+void MainComponent::playbackStarted()
+{
+    updatePlaybackUI();
+}
+
+void MainComponent::playbackStopped()
+{
+    updatePlaybackUI();
+}
+
+void MainComponent::playbackPositionChanged(double /*positionSeconds*/)
+{
+    // Could update a position display here
+}
+
+void MainComponent::updatePlaybackUI()
+{
+    bool playing = audioPlayer->isPlaying();
+    playButton.setButtonText(playing ? "Pause" : "Play");
+    playButton.setColour(juce::TextButton::textColourOffId,
+                         playing ? Mach1LookAndFeel::Colors::statusWarning
+                                 : Mach1LookAndFeel::Colors::statusActive);
+}
+
+void MainComponent::reloadAudio()
+{
+    // Reload audio for playback after lanes change
+    auto lanes = projectModel.getLanes();
+    audioPlayer->loadLanes(lanes);
 }

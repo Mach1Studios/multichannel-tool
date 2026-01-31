@@ -12,10 +12,12 @@
 #include "ffmpeg/FFmpegLocator.h"
 #include "ffmpeg/FFProbe.h"
 #include "audio/WaveformExtractor.h"
+#include "audio/AudioPlayer.h"
 
 class MainComponent : public juce::Component,
                       public juce::FileDragAndDropTarget,
-                      public ProjectModel::Listener
+                      public ProjectModel::Listener,
+                      public AudioPlayer::Listener
 {
 public:
     MainComponent();
@@ -37,11 +39,18 @@ public:
     void lanesReordered() override;
     void laneWaveformUpdated(Lane* lane) override;
 
+    // AudioPlayer::Listener overrides
+    void playbackStarted() override;
+    void playbackStopped() override;
+    void playbackPositionChanged(double positionSeconds) override;
+
 private:
     void handleDroppedFile(const juce::File& file);
     void showExportDialog();
     void performExport(int exportMode);
     void updateStatus(const juce::String& message);
+    void updatePlaybackUI();
+    void reloadAudio();
 
     // Export helpers
     void exportMultichannelWav(const juce::File& outputFile);
@@ -52,9 +61,12 @@ private:
     FFmpegLocator ffmpegLocator;
     std::unique_ptr<FFProbe> ffprobe;
     std::unique_ptr<WaveformExtractor> waveformExtractor;
+    std::unique_ptr<AudioPlayer> audioPlayer;
 
     // UI Components
     std::unique_ptr<LaneListComponent> laneListComponent;
+    juce::TextButton playButton{ "Play" };
+    juce::TextButton stopButton{ "Stop" };
     juce::TextButton exportButton{ "Export..." };
     juce::TextButton clearButton{ "Clear All" };
     juce::Label statusLabel;
@@ -67,7 +79,7 @@ private:
 
     // Constants
     static constexpr int kToolbarHeight = 50;
-    static constexpr int kFooterHeight = 40;
+    static constexpr int kFooterHeight = 20;
     static constexpr int kDropZoneMinHeight = 100;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)

@@ -52,6 +52,8 @@ target_sources(ChannelStacker PRIVATE
     src/ffmpeg/FFProbe.cpp
     src/audio/WaveformExtractor.h
     src/audio/WaveformExtractor.cpp
+    src/audio/AudioPlayer.h
+    src/audio/AudioPlayer.cpp
     src/ui/Mach1LookAndFeel.h
     src/ui/LaneComponent.h
     src/ui/LaneComponent.cpp
@@ -81,6 +83,8 @@ target_link_libraries(ChannelStacker PRIVATE
     juce::juce_graphics
     juce::juce_gui_basics
     juce::juce_gui_extra
+    juce::juce_audio_basics
+    juce::juce_audio_devices
     juce::juce_recommended_config_flags
     juce::juce_recommended_warning_flags
 )
